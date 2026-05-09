@@ -14,9 +14,11 @@ doctest = false
 
 [features]
 enable-avx = []
+enable-ckks = ["dep:poulpy-ckks"]
 
 [dependencies]
 bytemuck = {workspace = true}
+poulpy-ckks = {workspace = true, optional = true}
 poulpy-core = {workspace = true}
 poulpy-hal = {workspace = true}
 poulpy-cpu-ref = {workspace = true}

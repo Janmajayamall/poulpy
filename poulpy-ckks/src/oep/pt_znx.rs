@@ -1,27 +1,61 @@
-#[macro_export]
-macro_rules! impl_ckks_pt_znx_default_methods {
-    ($backend:ty) => {
-        fn ckks_extract_pt_znx_tmp_bytes(module: &poulpy_hal::layouts::Module<$backend>) -> usize
-        where
-            poulpy_hal::layouts::Module<$backend>: poulpy_hal::api::VecZnxLshTmpBytes + poulpy_hal::api::VecZnxRshTmpBytes,
-        {
-            <poulpy_hal::layouts::Module<$backend> as $crate::leveled::default::pt_znx::CKKSPlaintextZnxDefault<$backend>>::ckks_extract_pt_znx_tmp_bytes_default(module)
-        }
+use crate::default::pt_znx::CKKSPlaintextDefault;
 
-        fn ckks_extract_pt_znx<S: $crate::CKKSInfos>(
-            module: &poulpy_hal::layouts::Module<$backend>,
-            dst: &mut $crate::layouts::plaintext::CKKSPlaintextVecZnx<impl poulpy_hal::layouts::DataMut>,
-            src: &poulpy_core::layouts::GLWEPlaintext<impl poulpy_hal::layouts::DataRef>,
-            src_meta: &S,
-            scratch: &mut poulpy_hal::layouts::Scratch<$backend>,
-        ) -> anyhow::Result<()>
-        where
-            poulpy_hal::layouts::Scratch<$backend>: poulpy_core::ScratchTakeCore<$backend>,
-            poulpy_hal::layouts::Module<$backend>: poulpy_hal::api::VecZnxLsh<$backend> + poulpy_hal::api::VecZnxRsh<$backend>,
-        {
-            <poulpy_hal::layouts::Module<$backend> as $crate::leveled::default::pt_znx::CKKSPlaintextZnxDefault<$backend>>::ckks_extract_pt_znx_default(module, dst, src, src_meta, scratch)
-        }
-    };
+use anyhow::Result;
+use poulpy_core::{
+    ScratchArenaTakeCore,
+    layouts::{GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, LWEInfos},
+};
+use poulpy_hal::{
+    api::{VecZnxLshBackend, VecZnxLshTmpBytes, VecZnxRshBackend, VecZnxRshTmpBytes},
+    layouts::{Backend, Module, ScratchArena},
+};
+
+use crate::{CKKSInfos, SetCKKSInfos};
+
+/// # Safety
+///
+/// Implementations must satisfy the contracts of all trait methods, including
+/// any HAL-level invariants (alignment, layout, scratch sizing) implied by the
+/// associated method signatures.
+pub unsafe trait CKKSPlaintextZnxImpl<BE: Backend>: Backend {
+    fn ckks_extract_pt_znx_tmp_bytes(module: &Module<BE>) -> usize;
+
+    fn ckks_extract_pt_znx<Dst, Src>(
+        module: &Module<BE>,
+        dst: &mut Dst,
+        src: &Src,
+        scratch: &mut ScratchArena<'_, BE>,
+    ) -> Result<()>
+    where
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
+        Src: GLWEToBackendRef<BE> + GLWEInfos + LWEInfos + CKKSInfos;
 }
 
-pub use crate::impl_ckks_pt_znx_default_methods;
+#[allow(private_bounds)]
+unsafe impl<BE: Backend> CKKSPlaintextZnxImpl<BE> for BE
+where
+    BE: poulpy_hal::oep::HalVecZnxImpl<BE>,
+    Module<BE>: crate::default::pt_znx::CKKSPlaintextDefault<BE>
+        + VecZnxLshTmpBytes
+        + VecZnxRshTmpBytes
+        + VecZnxLshBackend<BE>
+        + VecZnxRshBackend<BE>,
+    for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
+{
+    fn ckks_extract_pt_znx_tmp_bytes(module: &Module<BE>) -> usize {
+        module.ckks_extract_pt_znx_tmp_bytes_default()
+    }
+
+    fn ckks_extract_pt_znx<Dst, Src>(
+        module: &Module<BE>,
+        dst: &mut Dst,
+        src: &Src,
+        scratch: &mut ScratchArena<'_, BE>,
+    ) -> Result<()>
+    where
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
+        Src: GLWEToBackendRef<BE> + GLWEInfos + LWEInfos + CKKSInfos,
+    {
+        module.ckks_extract_pt_znx_default(dst, src, scratch)
+    }
+}
