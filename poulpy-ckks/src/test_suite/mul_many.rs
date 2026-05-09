@@ -5,6 +5,7 @@
 //! | Function | Path exercised |
 //! |----------|----------------|
 //! | [`test_mul_many_aligned`] | balanced tree on `n=4` aligned inputs |
+//! | [`test_mul_many_two_terms_exact_tmp`] | `n=2` with scratch sized exactly from `ckks_mul_many_tmp_bytes` |
 //! | [`test_mul_many_single_smaller_output`] | one input into a narrower output |
 //! | [`test_mul_many_odd_tree`] | odd `n=5` exercising the carry-up branch |
 //! | [`test_mul_many_unaligned_log_budget`] | one input rescaled by one limb |
@@ -85,6 +86,34 @@ fn run<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F,
 
 pub fn test_mul_many_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     run(ctx, 4, ctx.max_k(), "mul_many_aligned");
+}
+
+pub fn test_mul_many_two_terms_exact_tmp<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+    let n: usize = 2;
+    let mut setup_scratch = ScratchOwned::<BE>::alloc(ctx.scratch_size);
+    let (factors, want_re, want_im) = build_factors(ctx, n);
+    let cts: Vec<_> = factors
+        .iter()
+        .map(|(re, im)| ctx.encrypt(ctx.max_k(), re, im, &mut setup_scratch.borrow()))
+        .collect();
+    let ct_refs: Vec<&_> = cts.iter().collect();
+    let mut ct_res = ctx.alloc_ct(ctx.max_k());
+
+    let ct_infos = ctx.ct_infos();
+    let tsk_infos = ctx.params.tsk_layout();
+    let bytes = ctx.module.ckks_mul_many_tmp_bytes(n, &ct_infos, &tsk_infos);
+    let mut op_scratch = ScratchOwned::<BE>::alloc(bytes);
+    ctx.module
+        .ckks_mul_many(&mut ct_res, &ct_refs, ctx.tsk(), &mut op_scratch.borrow())
+        .unwrap();
+
+    ctx.assert_decrypt_precision(
+        "mul_many_two_terms_exact_tmp",
+        &ct_res,
+        &want_re,
+        &want_im,
+        &mut setup_scratch.borrow(),
+    );
 }
 
 pub fn test_mul_many_single_smaller_output<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {

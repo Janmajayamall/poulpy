@@ -9,7 +9,7 @@ use std::{
 };
 
 use anyhow::Result;
-use poulpy_core::layouts::{Base2K, Degree, GLWE, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, LWEInfos, Rank};
+use poulpy_core::layouts::{Base2K, Degree, GLWE, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, GLWEViewMut, LWEInfos, Rank};
 use poulpy_core::{GLWENormalize, ScratchArenaTakeCore};
 use poulpy_hal::layouts::{Backend, Data, HostBackend, HostDataRef, Module, ScratchArena};
 
@@ -157,6 +157,119 @@ where
     fn to_backend_mut(&mut self) -> GLWE<BE::BufMut<'_>> {
         GLWEToBackendMut::to_backend_mut(&mut self.inner)
     }
+}
+
+/// Scratch-backed mutable CKKS ciphertext view.
+///
+/// This is the CKKS analogue of core's [`GLWEViewMut`]: the limb storage is
+/// borrowed from a [`ScratchArena`] in the backend-native buffer type, while the
+/// CKKS semantic metadata is carried alongside the GLWE view.
+pub struct CKKSCiphertextViewMut<'a, BE: Backend + 'a> {
+    inner: GLWEViewMut<'a, BE>,
+    meta: CKKSMeta,
+}
+
+impl<'a, BE: Backend + 'a> CKKSCiphertextViewMut<'a, BE> {
+    pub fn from_inner(inner: GLWEViewMut<'a, BE>, meta: CKKSMeta) -> Self {
+        Self { inner, meta }
+    }
+
+    pub fn into_inner(self) -> GLWEViewMut<'a, BE> {
+        self.inner
+    }
+}
+
+impl<'a, BE: Backend + 'a> Deref for CKKSCiphertextViewMut<'a, BE> {
+    type Target = GLWEViewMut<'a, BE>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'a, BE: Backend + 'a> DerefMut for CKKSCiphertextViewMut<'a, BE> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl<'a, BE: Backend + 'a> LWEInfos for CKKSCiphertextViewMut<'a, BE> {
+    fn base2k(&self) -> Base2K {
+        self.inner.base2k()
+    }
+
+    fn n(&self) -> Degree {
+        self.inner.n()
+    }
+
+    fn size(&self) -> usize {
+        self.inner.size()
+    }
+}
+
+impl<'a, BE: Backend + 'a> GLWEInfos for CKKSCiphertextViewMut<'a, BE> {
+    fn rank(&self) -> Rank {
+        self.inner.rank()
+    }
+}
+
+impl<'a, BE: Backend + 'a> CKKSInfos for CKKSCiphertextViewMut<'a, BE> {
+    fn meta(&self) -> CKKSMeta {
+        self.meta
+    }
+
+    fn log_delta(&self) -> usize {
+        self.meta.log_delta()
+    }
+
+    fn log_budget(&self) -> usize {
+        self.meta.log_budget()
+    }
+}
+
+impl<'a, BE: Backend + 'a> SetCKKSInfos for CKKSCiphertextViewMut<'a, BE> {
+    fn set_meta(&mut self, meta: CKKSMeta) {
+        self.meta = meta;
+    }
+}
+
+impl<'a, BE: Backend + 'a> GLWEToBackendRef<BE> for CKKSCiphertextViewMut<'a, BE> {
+    fn to_backend_ref(&self) -> GLWE<BE::BufRef<'_>> {
+        self.inner.to_backend_ref()
+    }
+}
+
+impl<'a, BE: Backend + 'a> GLWEToBackendMut<BE> for CKKSCiphertextViewMut<'a, BE> {
+    fn to_backend_mut(&mut self) -> GLWE<BE::BufMut<'_>> {
+        self.inner.to_backend_mut()
+    }
+}
+
+/// CKKS layout carving helpers for backend-native scratch arenas.
+pub trait ScratchArenaTakeCKKS<'a, BE: Backend>: ScratchArenaTakeCore<'a, BE> + Sized {
+    fn take_ckks_ciphertext_scratch<I>(self, infos: &I, meta: CKKSMeta) -> (CKKSCiphertextViewMut<'a, BE>, Self)
+    where
+        BE: 'a,
+        I: GLWEInfos,
+    {
+        let (inner, scratch) = self.take_glwe_scratch(infos);
+        (CKKSCiphertextViewMut::from_inner(inner, meta), scratch)
+    }
+
+    fn take_ckks_ciphertext_like_scratch<D>(self, ct: &CKKSCiphertext<D>) -> (CKKSCiphertextViewMut<'a, BE>, Self)
+    where
+        BE: 'a,
+        D: Data,
+    {
+        self.take_ckks_ciphertext_scratch(ct, ct.meta())
+    }
+}
+
+impl<'a, BE, T> ScratchArenaTakeCKKS<'a, BE> for T
+where
+    BE: Backend + 'a,
+    T: ScratchArenaTakeCore<'a, BE>,
+{
 }
 
 /// Maintenance operations for resizing ciphertext limb storage.

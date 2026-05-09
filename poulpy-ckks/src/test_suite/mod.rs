@@ -478,6 +478,10 @@ macro_rules! ckks_backend_test_suite {
             );
             run_test!(mul_many_aligned, $crate::test_suite::mul_many::test_mul_many_aligned);
             run_test!(
+                mul_many_two_terms_exact_tmp,
+                $crate::test_suite::mul_many::test_mul_many_two_terms_exact_tmp
+            );
+            run_test!(
                 mul_many_single_smaller_output,
                 $crate::test_suite::mul_many::test_mul_many_single_smaller_output
             );

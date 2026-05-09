@@ -3,7 +3,7 @@ use poulpy_core::{
     GLWETensoring, ScratchArenaTakeCore,
     layouts::{
         GGLWEInfos, GLWE, GLWEInfos, GLWELayout, GLWETensor, GLWETensorKeyPrepared, GLWEToBackendMut, GLWEToBackendRef, LWEInfos,
-        ModuleCoreAlloc, TorusPrecision,
+        TorusPrecision,
     },
 };
 use poulpy_hal::{
@@ -12,21 +12,14 @@ use poulpy_hal::{
 };
 
 use crate::{
-    CKKSCtBounds, CKKSInfos,
-    layouts::{CKKSCiphertext, CKKSModuleAlloc, ciphertext::CKKSOffset},
+    CKKSCtBounds, CKKSInfos, CKKSMeta,
+    layouts::{CKKSCiphertext, CKKSCiphertextViewMut, ScratchArenaTakeCKKS, ciphertext::CKKSOffset},
     leveled::api::{
         CKKSAddManyOps, CKKSAddOps, CKKSAffineOps, CKKSDotProductOps, CKKSMulAddOps, CKKSMulManyOps, CKKSMulOps, CKKSMulSubOps,
         CKKSRescaleOps, CKKSSubOps,
     },
     oep::CKKSImpl,
 };
-
-fn take_mul_tmp<BE: Backend, D: Data>(module: &Module<BE>, dst: &CKKSCiphertext<D>) -> CKKSCiphertext<BE::OwnedBuf>
-where
-    Module<BE>: ModuleCoreAlloc<OwnedBuf = BE::OwnedBuf>,
-{
-    module.ckks_ciphertext_alloc_from_infos(dst)
-}
 
 /// Guards `n` un-normalized accumulations against worst-case `i64` overflow.
 ///
@@ -89,14 +82,9 @@ where
 
 // --- CKKSMulManyOps ---
 
-fn ceil_log2(n: usize) -> usize {
-    debug_assert!(n >= 1);
-    if n <= 1 { 0 } else { (n - 1).ilog2() as usize + 1 }
-}
-
 impl<BE: Backend + CKKSImpl<BE>> CKKSMulManyOps<BE> for Module<BE>
 where
-    Module<BE>: CKKSMulOps<BE> + CKKSRescaleOps<BE> + ModuleCoreAlloc<OwnedBuf = BE::OwnedBuf>,
+    Module<BE>: CKKSMulOps<BE> + CKKSRescaleOps<BE>,
     for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
 {
     fn ckks_mul_many_tmp_bytes<R, T>(&self, n: usize, res: &R, tsk: &T) -> usize
@@ -105,11 +93,13 @@ where
         T: GGLWEInfos,
     {
         let mul_scratch: usize = self.ckks_mul_tmp_bytes(res, tsk);
-        if n <= 2 {
-            return mul_scratch;
+        let rescale_scratch: usize = self.ckks_rescale_tmp_bytes();
+        if n <= 1 {
+            return rescale_scratch;
         }
-        let depth: usize = ceil_log2(n);
-        2 * depth * GLWE::<Vec<u8>>::bytes_of_from_infos(res) + mul_scratch
+        let op_scratch: usize = mul_scratch.max(rescale_scratch);
+        let ct_bytes: usize = GLWE::<Vec<u8>>::bytes_of_from_infos(res);
+        (1 + 2 * (n - 2)) * ct_bytes + op_scratch
     }
 
     fn ckks_mul_many<Dst: Data, Src: Data, T: Data>(
@@ -136,19 +126,29 @@ where
             return Ok(());
         }
 
-        let mut acc = take_mul_tmp(self, inputs[0]);
-        self.ckks_mul_into(&mut acc, inputs[0], inputs[1], tsk, scratch)?;
+        scratch.scope(|scratch_local| {
+            let (mut acc, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+            self.ckks_mul_into(&mut acc, inputs[0], inputs[1], tsk, &mut scratch_local)?;
 
-        for ct in &inputs[2..] {
-            let mut compact = self.ckks_ciphertext_alloc(acc.base2k(), acc.effective_k().into());
-            self.ckks_rescale_into(&mut compact, 0, &acc, scratch)?;
+            for ct in &inputs[2..] {
+                let compact_layout = GLWELayout {
+                    n: acc.n(),
+                    base2k: acc.base2k(),
+                    k: acc.effective_k().into(),
+                    rank: acc.rank(),
+                };
+                let (mut compact, rem) = scratch_local.take_ckks_ciphertext_scratch(&compact_layout, CKKSMeta::default());
+                scratch_local = rem;
+                self.ckks_rescale_into(&mut compact, 0, &acc, &mut scratch_local)?;
 
-            let mut next = take_mul_tmp(self, inputs[0]);
-            self.ckks_mul_into(&mut next, &compact, *ct, tsk, scratch)?;
-            acc = next;
-        }
+                let (mut next, rem) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+                scratch_local = rem;
+                self.ckks_mul_into(&mut next, &compact, *ct, tsk, &mut scratch_local)?;
+                acc = next;
+            }
 
-        self.ckks_rescale_into(dst, dst.offset_unary(&acc), &acc, scratch)
+            self.ckks_rescale_into(dst, dst.offset_unary(&acc), &acc, &mut scratch_local)
+        })
     }
 }
 
@@ -156,7 +156,7 @@ where
 
 impl<BE: Backend + CKKSImpl<BE>> CKKSMulAddOps<BE> for Module<BE>
 where
-    Module<BE>: CKKSAddOps<BE> + CKKSMulOps<BE> + CKKSModuleAlloc<BE>,
+    Module<BE>: CKKSAddOps<BE> + CKKSMulOps<BE>,
     for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
 {
     fn ckks_mul_add_ct_tmp_bytes<R, T>(&self, res: &R, tsk: &T) -> usize
@@ -199,9 +199,11 @@ where
         CKKSCiphertext<B>: GLWEToBackendRef<BE> + GLWEInfos,
         GLWETensorKeyPrepared<T, BE>: poulpy_core::layouts::prepared::GLWETensorKeyPreparedToBackendRef<BE>,
     {
-        let mut tmp = take_mul_tmp(self, dst);
-        self.ckks_mul_into(&mut tmp, a, b, tsk, scratch)?;
-        self.ckks_add_assign(dst, &tmp, scratch)
+        scratch.scope(|scratch_local| {
+            let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+            self.ckks_mul_into(&mut tmp, a, b, tsk, &mut scratch_local)?;
+            self.ckks_add_assign(dst, &tmp, &mut scratch_local)
+        })
     }
 
     fn ckks_mul_add_pt_vec_znx_into<Dst: Data, A: Data, P>(
@@ -216,9 +218,11 @@ where
         CKKSCiphertext<A>: GLWEToBackendRef<BE> + GLWEInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        let mut tmp = take_mul_tmp(self, dst);
-        self.ckks_mul_pt_vec_znx_into(&mut tmp, a, pt_znx, scratch)?;
-        self.ckks_add_assign(dst, &tmp, scratch)
+        scratch.scope(|scratch_local| {
+            let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+            self.ckks_mul_pt_vec_znx_into(&mut tmp, a, pt_znx, &mut scratch_local)?;
+            self.ckks_add_assign(dst, &tmp, &mut scratch_local)
+        })
     }
 
     fn ckks_mul_add_pt_const_znx_into<Dst: Data, A: Data, P>(
@@ -234,9 +238,11 @@ where
         CKKSCiphertext<A>: GLWEToBackendRef<BE> + GLWEInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        let mut tmp = take_mul_tmp(self, dst);
-        self.ckks_mul_pt_const_znx_into(&mut tmp, a, pt_znx, pt_coeff, scratch)?;
-        self.ckks_add_assign(dst, &tmp, scratch)
+        scratch.scope(|scratch_local| {
+            let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+            self.ckks_mul_pt_const_znx_into(&mut tmp, a, pt_znx, pt_coeff, &mut scratch_local)?;
+            self.ckks_add_assign(dst, &tmp, &mut scratch_local)
+        })
     }
 }
 
@@ -340,7 +346,7 @@ where
 
 impl<BE: Backend + CKKSImpl<BE>> CKKSMulSubOps<BE> for Module<BE>
 where
-    Module<BE>: CKKSMulOps<BE> + CKKSSubOps<BE> + CKKSModuleAlloc<BE>,
+    Module<BE>: CKKSMulOps<BE> + CKKSSubOps<BE>,
     for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
 {
     fn ckks_mul_sub_ct_tmp_bytes<R, T>(&self, res: &R, tsk: &T) -> usize
@@ -383,9 +389,11 @@ where
         CKKSCiphertext<B>: GLWEToBackendRef<BE> + GLWEInfos,
         GLWETensorKeyPrepared<T, BE>: poulpy_core::layouts::prepared::GLWETensorKeyPreparedToBackendRef<BE>,
     {
-        let mut tmp = take_mul_tmp(self, dst);
-        self.ckks_mul_into(&mut tmp, a, b, tsk, scratch)?;
-        self.ckks_sub_assign(dst, &tmp, scratch)
+        scratch.scope(|scratch_local| {
+            let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+            self.ckks_mul_into(&mut tmp, a, b, tsk, &mut scratch_local)?;
+            self.ckks_sub_assign(dst, &tmp, &mut scratch_local)
+        })
     }
 
     fn ckks_mul_sub_pt_vec_znx_into<Dst: Data, A: Data, P>(
@@ -400,9 +408,11 @@ where
         CKKSCiphertext<A>: GLWEToBackendRef<BE> + GLWEInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        let mut tmp = take_mul_tmp(self, dst);
-        self.ckks_mul_pt_vec_znx_into(&mut tmp, a, pt_znx, scratch)?;
-        self.ckks_sub_assign(dst, &tmp, scratch)
+        scratch.scope(|scratch_local| {
+            let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+            self.ckks_mul_pt_vec_znx_into(&mut tmp, a, pt_znx, &mut scratch_local)?;
+            self.ckks_sub_assign(dst, &tmp, &mut scratch_local)
+        })
     }
 
     fn ckks_mul_sub_pt_const_znx_into<Dst: Data, A: Data, P>(
@@ -418,9 +428,11 @@ where
         CKKSCiphertext<A>: GLWEToBackendRef<BE> + GLWEInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        let mut tmp = take_mul_tmp(self, dst);
-        self.ckks_mul_pt_const_znx_into(&mut tmp, a, pt_znx, pt_coeff, scratch)?;
-        self.ckks_sub_assign(dst, &tmp, scratch)
+        scratch.scope(|scratch_local| {
+            let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+            self.ckks_mul_pt_const_znx_into(&mut tmp, a, pt_znx, pt_coeff, &mut scratch_local)?;
+            self.ckks_sub_assign(dst, &tmp, &mut scratch_local)
+        })
     }
 }
 
@@ -446,25 +458,27 @@ fn accumulate_unnormalized<BE, D, F>(
 where
     BE: Backend + CKKSImpl<BE>,
     D: Data,
-    Module<BE>: CKKSAddOps<BE> + CKKSModuleAlloc<BE>,
+    Module<BE>: CKKSAddOps<BE>,
     CKKSCiphertext<D>: GLWEToBackendMut<BE>,
     for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
-    F: FnMut(&mut CKKSCiphertext<BE::OwnedBuf>, usize, &mut ScratchArena<'_, BE>) -> Result<()>,
+    F: for<'a> FnMut(&mut CKKSCiphertextViewMut<'a, BE>, usize, &mut ScratchArena<'a, BE>) -> Result<()>,
 {
     if n <= 1 {
         return Ok(());
     }
-    let mut tmp = take_mul_tmp(module, dst);
-    for i in 1..n {
-        mul_term_into_tmp(&mut tmp, i, scratch)?;
-        <Module<BE> as CKKSAddOps<BE>>::ckks_add_assign(module, dst, &tmp, scratch)?;
-    }
-    Ok(())
+    scratch.scope(|scratch_local| {
+        let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
+        for i in 1..n {
+            mul_term_into_tmp(&mut tmp, i, &mut scratch_local)?;
+            <Module<BE> as CKKSAddOps<BE>>::ckks_add_assign(module, dst, &tmp, &mut scratch_local)?;
+        }
+        Ok(())
+    })
 }
 
 impl<BE: Backend + CKKSImpl<BE>> CKKSDotProductOps<BE> for Module<BE>
 where
-    Module<BE>: CKKSAddOps<BE> + CKKSMulOps<BE> + CKKSRescaleOps<BE> + GLWETensoring<BE> + CKKSModuleAlloc<BE>,
+    Module<BE>: CKKSAddOps<BE> + CKKSMulOps<BE> + CKKSRescaleOps<BE> + GLWETensoring<BE>,
     for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
 {
     fn ckks_dot_product_ct_tmp_bytes<R, T>(&self, n: usize, res: &R, tsk: &T) -> usize
