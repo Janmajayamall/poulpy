@@ -56,7 +56,7 @@ The `enable-avx` flag enables the `poulpy-cpu-avx` backend and requires `target_
 |---|---|
 | `standard` | One representative run across **all layers** with fixed parameters — used for version-to-version regression tracking |
 
-The `standard` binary uses a single parameter set (`N=4096`, `base2k=18`, `k=54`, `rank=1`) for all HAL and core benchmarks, and the standard parameter sets embedded in `poulpy-schemes` for the scheme-level benchmarks. Its results can be saved as named baselines for direct comparison across releases (see [Save and compare baselines](#save-and-compare-baselines)).
+The `standard` binary uses a single parameter set (`N=4096`, `base2k=18`, `k=54`, `rank=1`) for all HAL and core benchmarks, and the standard parameter sets embedded in the scheme crates for the scheme-level benchmarks. Its results can be saved as named baselines for direct comparison across releases (see [Save and compare baselines](#save-and-compare-baselines)).
 
 ## Configuring parameters via JSON
 

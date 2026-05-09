@@ -10,7 +10,10 @@ This branch completes the migration from the legacy host-oriented HAL/backend pl
 - Make `Module` the canonical allocation entrypoint for raw coefficient-domain layouts (`VecZnx`, `ScalarZnx`, `MatZnx`) and `VecZnxBig`; migrate workspace call sites to `Module::*_alloc[_n]` and restrict the old host-owned `alloc` constructors to crate-private visibility.
 - Remove the public explicit-`n` raw allocator surface entirely; allocation is now expressed only as `module.scalar_znx_alloc(...)`, `module.vec_znx_alloc(...)`, `module.vec_znx_alloc_with_max_size(...)`, and `module.mat_znx_alloc(...)`. Special-degree cases now build a module carrying the desired `n` first, then allocate through that module.
 - Remove the temporary host-allocation helper traits again and migrate tests/bench/core staging to explicit `Module::<HostBytesBackend>::new(...).<alloc>(...)` calls, keeping host-owned allocation a direct module concern rather than a separate HAL abstraction.
+- **Breaking:** HAL compute traits now take backend-native borrows and scratch explicitly: `Scratch` becomes `ScratchArena<'_, BE>`, `*ToRef` / `*ToMut` become `*ToBackendRef<BE>` / `*ToBackendMut<BE>`, and public trait names move to backend-explicit forms such as `VecZnxAddIntoBackend`, `VecZnxRotateAssignBackend`, and `VecZnxRshSubBackend`.
+- Add backend-owned/layout interop APIs: `Backend::{OwnedBuf, BufRef, BufMut}`, `HostBackend` / `DeviceBackend`, `TransferFrom<From>`, backend view aliases/reborrow traits for all major layouts, and allocator traits `ScalarZnxAlloc`, `VecZnxAlloc`, `MatZnxAlloc`, plus `api::reim::{NegacyclicFFT, NegacyclicFFTNew}`.
 - Fix the convolution API by renaming the output-shift parameter to `cnv_offset`, moving it to the front of the apply calls, and updating delegates and conformance tests to match the corrected calling convention.
+- **Breaking:** `Convolution::cnv_by_const_apply` no longer takes a raw coefficient slice; it now takes a backend `VecZnx` plus `(b_col, b_coeff)` selectors, matching the rest of the backend-native convolution surface.
 - Replace legacy OEP modules with the unified `oep::HalImpl` entrypoint to provide one consistent extension surface for backends.
 - Add family defaults for `vec_znx`, `vec_znx_big`, `vec_znx_dft`, `svp_ppol`, `vmp_pmat`, and `convolution` to reduce backend boilerplate and make overrides explicit.
 - Remove legacy OEP traits and per-family OEP modules; update delegates to route through `HalImpl` and simplify dispatch.
@@ -27,12 +30,15 @@ This branch completes the migration from the legacy host-oriented HAL/backend pl
 - Add `ModuleCoreAlloc` and `ModuleCoreCompressedAlloc`, then migrate workspace allocation sites so standard and compressed `poulpy-core` wrappers are allocated through `Module` instead of direct static `alloc*` constructors.
 - Restrict standard and compressed wrapper `alloc` / `alloc_from_infos` constructors to crate-private visibility now that `Module` is the canonical public allocation entrypoint.
 - Route the remaining host-owned raw-layout construction inside `poulpy-core` wrappers through `crate::layouts::host_module(...)`, so wrapper internals follow the same module-first allocation rule as HAL-facing code.
+- **Breaking:** Core traits and helpers now follow the HAL backend-native calling convention: scratch arguments are `ScratchArena<'_, BE>`, layout bounds use `GLWEToBackendRef<BE>` / `GLWEToBackendMut<BE>` and related prepared-key `...ToBackendRef<BE>` traits, and backend-generic extension points no longer assume host-slice views.
+- Add `api::ModuleTransfer` for typed upload/download of `LWE`, `GLWE`, `GGLWE`, `GGSW`, plaintexts, secrets, and prepared keys across backends; downstream code can now move full core objects without reaching into raw buffers.
 - Thread the corrected convolution-offset semantics through GLWE constant/plaintext multiply and tensoring paths so scratch sizing, truncation, and normalization all use the same convention.
 - Pass explicit effective-k information into convolution-backed multiply/tensor routines and mask partial bottom limbs correctly instead of assuming every input uses its full stored limb width.
 - Refresh GLWE tensor tests to cover the updated convolution API and the corrected effective-width handling.
 - Fix tensoring noise blowup when output operand had a smaller size than the input operand.
 - Split public APIs into `api` trait modules backed by `delegates` and `oep` layers to separate user-facing traits from backend hooks and dispatch.
 - Reorganize encryption, decryption, conversions, keyswitching, external products, and operations to match the new API structure.
+- **Breaking:** Backend-default wiring is now exported per family (`impl_encryption_defaults_full!`, `impl_glwe_trace_defaults_full!`, `impl_glwe_packing_defaults_full!`, etc.) instead of only through the old monolithic core default macro; add `impl_glwe_rotate_impl_from!` as an explicit delegation helper for backends that forward rotation to another backend.
 - Move backend conformance suites into `src/test_suite` and keep unit tests separate.
 - Refresh layouts, noise helpers, and utilities to align with the new API surface.
 - Re-export top-level modules to preserve public API ergonomics while routing through the new `api` traits.
@@ -50,15 +56,30 @@ This branch completes the migration from the legacy host-oriented HAL/backend pl
 - Update FFT64/NTT120 reference kernels, normalization, and shift helpers to keep behavior aligned with the new dispatch path.
 - Flatten AVX test module paths to remove redundant crate prefixes.
 - Split backend code into family-specific `hal_impl/*` modules (module/scratch/vec_znx/vmp/svp/convolution) for clearer override points.
+- Export FFT-table types needed by the new CKKS encoder API: `poulpy-cpu-ref::FFT64ReimTable` and `poulpy-cpu-avx::FFT64AvxReimTable`.
+- Move the runnable CKKS `poly2` example and reusable CKKS backend tests into `poulpy-cpu-ref`; add `poulpy-cpu-avx`'s opt-in `enable-ckks` feature so accelerated backends can wire in the CKKS layer without making it an unconditional dependency.
 
-### `poulpy-gpu-cuda`
-- Add an experimental opt-in `poulpy-gpu-cuda` crate that demonstrates the new generic backend model with explicit CPU/CUDA transfers, backend-owned `CudaBuf` storage, backend-native scratch usage, and initial CUDA-backed `VecZnx` operations.
-- Update CUDA NTT120/SVP/VMP glue to consume layout getters instead of public metadata fields.
+### `poulpy-ckks`
+- Implement a fully backend-generic leveled CKKS evaluator: all operations (add, sub, mul, rotate, conjugate, rescale, encryption, decryption, and plaintext-polynomial ops) are now generic over any backend implementing `poulpy-hal`, including `FFT64Ref`, `FFT64Avx`, `NTT120Ref`, and `NTT120Avx`.
+- Organize the public interface into the same four-module layered architecture as `poulpy-core`: `api` (user-facing traits), `oep` (backend extension points), `delegates` (dispatch), and `default` (portable reference implementations). Backends opt into portable defaults via `impl_ckks_*_defaults!` macros or can override individual operations directly through OEP.
+- **Breaking:** Collapse the previous plaintext family split (`CKKSPlaintextVecZnx`, `CKKSPlaintextVecRnx`, `CKKSPlaintextCstZnx`, `CKKSPlaintextCstRnx`, and the old conversion traits) into a unified `CKKSPlaintext<D>` plus `CKKSPlaintextVecHostCodec<F>` for host float encode/decode and `CKKSModuleAlloc` for module-first plaintext/ciphertext allocation.
+- Add first-class `api` trait families for CKKS copy, affine/composite helpers, and imaginary-unit operations, so backends can inherit or override those evaluator entrypoints independently.
+- Add `UnnormalizedCKKSCiphertext` wrapper for fused linear operations: the type does not implement `GLWEToBackendRef` or `GLWEToBackendMut`, making it a compile error to pass an un-normalized value into any DFT-domain primitive (keyswitching, convolution, automorphism). Call `UnnormalizedCKKSCiphertext::normalize` before the next such step.
+- Add `CKKSCiphertextViewMut` for in-place write patterns that avoid hot-path allocations in composite operations.
+- Add scratch/layout helpers for the new evaluator surface: `ScratchArenaTakeCKKS`, backend-view aliases `CKKSCiphertextRef` / `CKKSCiphertextMut`, and new user-facing traits `CKKSAddOpsUnnormalized`, `CKKSSubOpsUnnormalized`, `CKKSAffineOps`, `CKKSImagOps`, and `CKKSCopyOps`.
+- Move the CKKS conformance test suite into `poulpy-ckks/src/test_suite/` and wire it into `poulpy-cpu-ref` via `ckks_backend_test_suite!`; CI gains a dedicated focused step that runs the CKKS suite against every available backend.
+- Remove direct concrete-backend dependencies from `poulpy-ckks` itself; backend crates now opt into CKKS integration from their side, keeping the crate package-level dependencies backend-agnostic as well as the API.
+- Preserve the historical `crate::leveled::api` import paths as a backwards-compatible re-export shim; canonical paths are now `crate::api`, `crate::oep`, `crate::delegates`, and `crate::default`.
+- **Breaking:** CKKS backend override wiring also moves to per-family traits/macros (`CKKSAddImpl`, `CKKSMulImpl`, `CKKSRotateImpl`, `impl_ckks_add_defaults!`, etc.) instead of the older aggregate default macro/export pattern.
+- Document unnormalized operations with signed-digit behavior, worst-case O(n) growth, Irwin–Hall O(√n) typical growth, and the `n ≤ 2^(63 − base2k)` safety bound against i64 overflow.
 
-### `poulpy-schemes`
+### `poulpy-bin-fhe`
 - Update bin-FHE BDD arithmetic, blind rotation, and test suites for the new core/HAL APIs.
 - Refresh blind-rotation / circuit-bootstrapping staging helpers for the new `ScalarZnx` view API.
-- Refresh scheme examples and library wiring; remove the redundant `poulpy-schemes/README.md`.
+- Refresh scheme examples and library wiring to match the crate split and the new backend-generic APIs.
+- **Breaking:** Bin-FHE traits and helpers now follow the backend-owned core/HAL surface: methods take `ScratchArena<'_, BE>`, use `...ToBackendRef<BE>` / `...ToBackendMut<BE>` bounds for ciphertexts and prepared keys, and many generic entrypoints now require `BE: Backend<OwnedBuf = Vec<u8>>` plus `ModuleCoreAlloc`.
+- Move public constructors/allocation helpers to module-first forms across the crate: `FheUint::alloc[_from_infos](module, ...)`, `LookupTable::alloc(module, ...)`, `GLWEBlindRetriever::alloc(module, ...)`, and `CircuitBootstrappingKey::alloc_from_infos(module, ...)`.
+- Add `LookupTable::to_backend` for explicit backend transfer of LUT storage and keep prepared blind-rotation / circuit-bootstrapping factories on backend-owned output types via `ScratchArena`.
 - Align bin-FHE key/prepared layouts and circuit helpers with the refactored core layouts.
 - Add `ReaderFrom` / `WriterTo` for `CircuitBootstrappingKey` and `BDDKey<Vec<u8>>` (optional `ks_glwe` encoded with a presence tag), with stable ATK map serialization (sorted Galois keys).
 
@@ -66,10 +87,13 @@ This branch completes the migration from the legacy host-oriented HAL/backend pl
 - Update core and HAL convolution benchmarks to the new convolution API.
 - Align benchmark suites with the new HAL/core APIs and update parameter examples.
 - Remove remaining direct layout-field assumptions from benchmark staging helpers.
+- Add shared host-upload/randomization helpers and `ModuleTransfer`-based typed uploads so benchmark fixtures can be staged on arbitrary backends without reaching into raw layout internals.
+- Make CKKS benchmarks opt-in behind a new `ckks-bench` feature and gate the CKKS bench targets with `required-features`, so default bench runs do not pull CKKS support unless requested.
+- Export new benchmark-support helpers for backend-generic staging: `upload_host_*`, `random_host_*`, `random_backend_*`, and `*_backend_ref/mut` adapters for raw HAL/core objects.
 
 ### Build & Docs
-- Refresh root and crate READMEs (naming, examples, and links); update docs references to reduce drift after the refactor.
-- Update `rust-toolchain.toml` (nightly toolchain) to keep build expectations aligned.
+- Refresh root and crate READMEs (naming, examples, links, and architecture guidance); document the shared `api` / `oep` / `delegates` / `default` layering and backend-integration flow across the workspace.
+- Extend CI with dedicated CKKS-focused `poulpy-cpu-ref` test steps in both AVX-enabled and portable configurations.
 - Add acknowledgements for PZ, EF, and ENS in the root README.
 
 ### Fixes

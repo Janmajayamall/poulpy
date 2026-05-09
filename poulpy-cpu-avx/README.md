@@ -6,7 +6,8 @@ This backend implements the Poulpy HAL extension traits and can be used by:
 
 - [`poulpy-hal`](https://github.com/poulpy-fhe/poulpy/tree/main/poulpy-hal)
 - [`poulpy-core`](https://github.com/poulpy-fhe/poulpy/tree/main/poulpy-core)
-- [`poulpy-schemes` (CKKS, bin-FHE)](https://github.com/poulpy-fhe/poulpy/tree/main/poulpy-schemes)
+- [`poulpy-ckks`](https://github.com/poulpy-fhe/poulpy/tree/main/poulpy-ckks) (opt-in via `enable-ckks` feature)
+- [`poulpy-bin-fhe`](https://github.com/poulpy-fhe/poulpy/tree/main/poulpy-bin-fhe)
 
 ## 🚩 Safety and Requirements
 
@@ -69,23 +70,27 @@ let module: Module<FFT64Avx> = Module::<FFT64Avx>::new(1 << log_n);
 let module: Module<NTT120Avx> = Module::<NTT120Avx>::new(1 << log_n);
 ```
 
-Once compiled with `enable-avx`, both backends are usable transparently anywhere Poulpy expects a backend type (`poulpy-hal`, `poulpy-core`, `poulpy-schemes`).
+Once compiled with `enable-avx`, both backends are usable transparently anywhere Poulpy expects a backend type (`poulpy-hal`, `poulpy-core`, `poulpy-ckks`, `poulpy-bin-fhe`).
 
 ## 🤝 Contributors
 
 To implement your own Poulpy backend (SIMD or accelerator):
 
-1. Define a backend struct
-2. Implement the open extension traits from `poulpy-hal/oep`
-3. Implement the `Backend` trait
+1. Define a backend struct and implement the `Backend` trait from `poulpy-hal`.
+2. For each HAL operation family, either call the blanket default or implement the OEP trait directly with a custom dispatch.
+3. For each `poulpy-core` operation family, either call the corresponding `impl_*_defaults_full!` macro to inherit the portable implementation, or implement the OEP trait directly to override it.
+4. Optionally, do the same for `poulpy-ckks` (behind an `enable-ckks` feature gate) using the `impl_ckks_*_defaults!` macros or direct OEP trait implementations.
+
+At every layer the macro and the direct implementation are mutually exclusive per operation family: the macro opts the backend into the portable `default` path, while a direct OEP impl replaces it entirely. There is no requirement to use the macros — a backend that needs full control can implement every OEP trait by hand.
 
 Your backend will automatically integrate with:
 
 * `poulpy-hal`
 * `poulpy-core`
-* `poulpy-schemes` (CKKS, bin-FHE)
+* `poulpy-ckks`
+* `poulpy-bin-fhe`
 
-No modifications to those crates are required — the HAL provides the extension points.
+No modifications to those crates are required — the HAL provides the extension points. Only operations that need a faster implementation require explicit overrides; everything else is inherited from the `default` layer for free.
 
 ---
 

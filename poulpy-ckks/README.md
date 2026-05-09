@@ -77,21 +77,20 @@ type, not to the backend.
 
 ## Crate Organization
 
-The crate is arranged in four stacked layers, from public API down to
-backend dispatch, plus supporting modules for encoding, data structures,
-testing, and error handling.
+The crate is arranged in four interdependent modules (plus supporting
+modules for encoding, data structures, testing, and error handling)
+that follow the same pattern used throughout the Poulpy workspace:
 
 ```
-┌───────────────────────────────────────────────────────────────────┐
-│  api  (public evaluator traits implemented on Module<BE>)         │
-├───────────────────────────────────────────────────────────────────┤
-│  delegates  (Module<BE> impls; composite ops live here)           │
-├───────────────────────────────────────────────────────────────────┤
-│  oep  (unsafe backend dispatch traits + blanket impls + macros)   │
-├───────────────────────────────────────────────────────────────────┤
-│  default  (concrete algorithm impl as safe trait methods)         │
-└───────────────────────────────────────────────────────────────────┘
+   ┌─────────┐     ┌─────────┐     ┌─────────────┐     ┌────────────────┐
+   │   api   │────►│   oep   │────►│  delegates  │◄────│    default     │
+   └─────────┘     └─────────┘     └─────────────┘     └────────────────┘
 ```
+
+**Overriding a method**: a backend replaces the default behavior for any
+operation by implementing the corresponding `oep` trait directly instead
+of relying on the blanket wiring to `default`.  Only hot-path operations
+need explicit overrides; everything else is inherited for free.
 
 ### Layer descriptions
 
@@ -176,8 +175,8 @@ combining them via `ckks_mul_i_assign`:
 ```rust,ignore
 use poulpy_ckks::{
     CKKSInfos,
+    api::{CKKSAddOps, CKKSAffineOps, CKKSImagOps, CKKSMulOps},
     layouts::{CKKSCiphertext, CKKSMaintainOps, CKKSModuleAlloc, CKKSPlaintext, CKKSPlaintextVecHostCodec},
-    leveled::api::{CKKSAddOps, CKKSAffineOps, CKKSImagOps, CKKSMulOps},
 };
 
 // squaring: consumes one log_delta chunk of homomorphic capacity
@@ -221,8 +220,8 @@ encoding, encryption, evaluation, decryption, and decoding.
 ## Evaluation Style
 
 Leveled operations are invoked through traits implemented on
-`poulpy_hal::layouts::Module<BE>`. All traits are defined in `crate::api` and
-also accessible under the historical `crate::leveled::api` path.
+`poulpy_hal::layouts::Module<BE>`. All traits are defined in `crate::api`.
+The historical `crate::leveled::api` path remains available as a backwards-compat alias.
 
 | Trait | Operations |
 |-------|-----------|
@@ -253,8 +252,8 @@ the module:
 
 ```rust,ignore
 use poulpy_ckks::{
+    api::CKKSAddOps,
     layouts::CKKSCiphertext,
-    leveled::api::CKKSAddOps,
 };
 
 module.ckks_add_into(&mut dst, &lhs, &rhs, scratch)?;

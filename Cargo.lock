@@ -238,15 +238,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
-name = "cudarc"
-version = "0.19.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f071cd6a7b5d51607df76aa2d426aaabc7a74bc6bdb885b8afa63a880572ad9b"
-dependencies = [
- "libloading",
-]
-
-[[package]]
 name = "dashu-base"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -446,16 +437,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
 
 [[package]]
-name = "libloading"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
-dependencies = [
- "cfg-if",
- "windows-link",
-]
-
-[[package]]
 name = "libm"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -556,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "poulpy-bench"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "criterion",
  "poulpy-bin-fhe",
@@ -572,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "poulpy-bin-fhe"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -587,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "poulpy-ckks"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -599,7 +580,7 @@ dependencies = [
 
 [[package]]
 name = "poulpy-core"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -614,7 +595,7 @@ dependencies = [
 
 [[package]]
 name = "poulpy-cpu-avx"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "bytemuck",
  "byteorder",
@@ -633,7 +614,7 @@ dependencies = [
 
 [[package]]
 name = "poulpy-cpu-ref"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -653,20 +634,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "poulpy-gpu-cuda"
-version = "0.5.0"
-dependencies = [
- "bytemuck",
- "cc",
- "cudarc",
- "poulpy-cpu-ref",
- "poulpy-hal",
- "rand_distr",
-]
-
-[[package]]
 name = "poulpy-hal"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -1076,12 +1045,6 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "windows-link"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
 
 [[package]]
 name = "windows-sys"

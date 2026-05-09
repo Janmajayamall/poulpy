@@ -34,6 +34,25 @@ where
 For a runnable end-to-end example using a concrete backend, see
 `poulpy-cpu-ref/examples/core_encryption.rs`.
 
+## Crate Organization
+
+`poulpy-core` follows the same four-module layer pattern used throughout the Poulpy workspace:
+
+```
+   ┌─────────┐     ┌─────────┐     ┌─────────────┐     ┌────────────────┐
+   │   api   │────►│   oep   │────►│  delegates  │◄────│    default     │
+   └─────────┘     └─────────┘     └─────────────┘     └────────────────┘
+```
+
+| Module | Role |
+|--------|------|
+| `api` | Public traits for RLWE operations (`GLWEEncryptSk`, `GLWEAutomorphism`, `GLWETensoring`, …). Trait bounds reference `oep` for the backend capabilities they need. |
+| `oep` | **Open Extension Points.** Unsafe backend dispatch traits (one per operation family). A blanket `impl` wires any conforming backend to the corresponding `default` method automatically. Macros (`impl_*_defaults_full!`) are what a backend crate calls to opt in. |
+| `default` | Portable algorithm implementations as safe trait methods — the fallback every backend gets for free. |
+| `delegates` | Implements each `api` trait on `Module<BE>` by dispatching through `oep`. |
+
+**Overriding an operation**: a backend implements the corresponding `oep` trait directly instead of relying on the blanket wiring to `default`. Only the operations that need a faster or device-native implementation require an override; everything else is inherited automatically.
+
 ## Layouts
 
 This crate defines three categories of layouts for `LWE`, `GLWE`, `GGLWE`, and `GGSW` objects (and their derivatives), all instantiated using **`poulpy-hal`** layouts. Each serves a distinct purpose:
