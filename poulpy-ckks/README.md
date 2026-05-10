@@ -17,6 +17,29 @@ The crate exposes:
 - secret-key encryption and decryption
 - leveled arithmetic implemented through traits on `Module<BE>`
 
+## Tests And Backend Integration
+
+`poulpy-ckks` exposes its public API as soon as the crate is imported. Backend
+crates own the feature flags that wire concrete CKKS implementations into that
+API.
+
+```sh
+cargo test -p poulpy-ckks
+```
+
+The full backend-generic CKKS conformance suite is instantiated by backend
+crates. To run it against the portable reference backends:
+
+```sh
+cargo test -p poulpy-cpu-ref --features enable-ckks
+```
+
+To run the reference CKKS example:
+
+```sh
+cargo run -p poulpy-cpu-ref --example ckks_poly2 --features enable-ckks
+```
+
 Like the rest of Poulpy, the public API is backend-agnostic. `poulpy-ckks`
 does not depend on any concrete backend crate. Default dispatches and fallback
 implementations flow through `poulpy-hal` and `poulpy-core`, while
@@ -160,7 +183,7 @@ encoders), use `Encoder::from_table(table, m)` instead of `new`.
 ## End-to-End Example: Evaluate `(a + b*x) + (c + d*x) * x^2`
 
 The crate includes a runnable example at
-[`poulpy-cpu-ref/examples/poly2.rs`](../poulpy-cpu-ref/examples/poly2.rs) that:
+[`poulpy-cpu-ref/examples/ckks_poly2.rs`](../poulpy-cpu-ref/examples/ckks_poly2.rs) that:
 
 1. encodes complex slots into a CKKS plaintext
 2. encrypts `x`
@@ -318,4 +341,4 @@ these higher-level features without changing the backend-agnostic programming mo
 - `src/layouts/` for CKKS data structures
 - `src/api/` for evaluator trait definitions
 - `src/test_suite/` for end-to-end usage patterns
-- `poulpy-cpu-ref/examples/poly2.rs` for the full end-to-end runnable example
+- `poulpy-cpu-ref/examples/ckks_poly2.rs` for the full end-to-end runnable example

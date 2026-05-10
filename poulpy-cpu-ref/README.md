@@ -19,7 +19,8 @@ This backend integrates transparently with:
 
 ## When is this backend used?
 
-`poulpy-cpu-ref` is always available and requires **no compilation flags and no CPU features**.
+The FFT64 and NTT120 reference HAL backends are always available and require
+**no compilation flags and no CPU features**.
 
 It is automatically selected when:
 
@@ -28,6 +29,25 @@ It is automatically selected when:
 - portability and reproducibility are more important than raw performance.
 
 No additional configuration is required to use it.
+
+Higher-level backend wiring is feature-gated:
+
+- `enable-core` wires the reference backends into `poulpy-core` defaults.
+- `enable-ckks` wires the reference backends into `poulpy-ckks` defaults and
+  also enables core support.
+
+Useful test commands:
+
+```sh
+# HAL/reference backend tests
+cargo test -p poulpy-cpu-ref
+
+# Core conformance tests on FFT64Ref and NTT120Ref
+cargo test -p poulpy-cpu-ref --features enable-core
+
+# CKKS conformance tests on FFT64Ref and NTT120Ref
+cargo test -p poulpy-cpu-ref --features enable-ckks
+```
 
 ---
 
@@ -87,7 +107,7 @@ To implement your own backend (SIMD or accelerator):
 1. Define a backend struct and implement the `Backend` trait from `poulpy-hal`.
 2. For each HAL operation family, either call the blanket default or implement the OEP trait directly with a custom dispatch.
 3. For each `poulpy-core` operation family, either call the corresponding `impl_*_defaults_full!` macro to inherit the portable implementation, or implement the OEP trait directly to override it.
-4. Optionally, do the same for `poulpy-ckks` (behind an `enable-ckks` feature gate) using the `impl_ckks_*_defaults!` macros or direct OEP trait implementations.
+4. Optionally, do the same for `poulpy-ckks` behind a backend-owned `enable-ckks` feature using the `impl_ckks_*_defaults!` macros or direct OEP trait implementations.
 
 At every layer the macro and the direct implementation are mutually exclusive per operation family: the macro opts the backend into the portable `default` path, while a direct OEP impl replaces it entirely. There is no requirement to use the macros — a backend that needs full control can implement every OEP trait by hand.
 

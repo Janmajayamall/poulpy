@@ -597,6 +597,7 @@ dependencies = [
 name = "poulpy-cpu-avx"
 version = "0.6.0"
 dependencies = [
+ "anyhow",
  "bytemuck",
  "byteorder",
  "itertools 0.14.0",

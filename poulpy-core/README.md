@@ -4,6 +4,20 @@
 
 ## Getting Started
 
+`poulpy-core` exposes its public API as soon as the crate is imported. Backend
+crates own the feature flags that wire concrete implementations into that API.
+
+```sh
+cargo test -p poulpy-core
+```
+
+The backend conformance tests are instantiated by backend crates. To run the
+portable reference backend core suite:
+
+```sh
+cargo test -p poulpy-cpu-ref --features enable-core
+```
+
 `poulpy-core` is backend-agnostic. Concrete execution lives in backend crates such as
 `poulpy-cpu-ref` or `poulpy-cpu-avx`, which provide the backend type `BE` used by
 `poulpy_hal::layouts::Module<BE>`. The HAL remains dispatch-only: `poulpy-cpu-ref`
@@ -134,3 +148,10 @@ module.ggsw_automorphism(...);
 A fully generic backend conformance suite is available in [`src/test_suite`](./src/test_suite).
 Concrete backend crates instantiate it via `poulpy_core::core_backend_test_suite!`, keeping
 `poulpy-core` free of any concrete backend dependency.
+
+Useful commands:
+
+```sh
+cargo test -p poulpy-core
+cargo test -p poulpy-cpu-ref --features enable-core
+```

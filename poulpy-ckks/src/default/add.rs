@@ -1,17 +1,47 @@
 use anyhow::Result;
 use poulpy_core::{
     GLWEAdd, GLWENormalize, GLWEShift, ScratchArenaTakeCore,
-    layouts::{GLWEInfos, GLWEPlaintext, GLWEPlaintextLayout, GLWEToBackendMut, GLWEToBackendRef, LWEInfos},
+    layouts::{Base2K, GLWEInfos, GLWEPlaintext, GLWEPlaintextLayout, GLWEToBackendMut, GLWEToBackendRef, LWEInfos},
 };
 use poulpy_hal::{
     api::{ModuleN, ScratchAvailable, VecZnxRshAddCoeffIntoBackend, VecZnxRshAddIntoBackend, VecZnxRshTmpBytes},
-    layouts::{Backend, Module, ScratchArena},
+    layouts::{Backend, Module, ScratchArena, VecZnx},
 };
 
 use crate::{
     CKKSInfos, CKKSMeta, SetCKKSInfos, checked_log_budget_sub, ckks_offset_binary, ckks_offset_unary,
+    layouts::{CKKSPlaintext, CKKSPlaintextVecHostCodec},
     leveled::default::CKKSPlaintextDefault,
 };
+
+pub(crate) fn ckks_one_pt<BE>(base2k: Base2K) -> Result<CKKSPlaintext<BE::OwnedBuf>>
+where
+    BE: Backend,
+{
+    let meta = CKKSMeta {
+        log_delta: 1,
+        log_budget: 0,
+    };
+
+    let mut host_pt = CKKSPlaintext::from_inner(
+        GLWEPlaintext::alloc_with_meta(1usize.into(), base2k, meta.min_k(base2k)),
+        meta,
+    );
+    host_pt.encode_host_floats(&[1.0f64])?;
+
+    let shape = host_pt.inner.data.shape();
+    let backend_inner = GLWEPlaintext {
+        data: VecZnx::from_data_with_max_size(
+            BE::from_host_bytes(host_pt.inner.data.data.as_ref()),
+            shape.n(),
+            shape.cols(),
+            shape.size(),
+            shape.max_size(),
+        ),
+        base2k,
+    };
+    Ok(CKKSPlaintext::from_inner(backend_inner, meta))
+}
 
 pub trait CKKSAddDefault<BE: Backend> {
     fn ckks_add_tmp_bytes_default(&self) -> usize
@@ -132,6 +162,16 @@ pub trait CKKSAddDefault<BE: Backend> {
         dst.set_log_budget(dst_log_budget.min(a.log_budget()));
         dst.set_log_delta(dst.log_delta().min(a.log_delta()));
         Ok(())
+    }
+
+    fn ckks_add_one_assign_default<Dst>(&self, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    where
+        Self: GLWENormalize<BE> + VecZnxRshAddCoeffIntoBackend<BE> + CKKSPlaintextDefault<BE>,
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos,
+        for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
+    {
+        let one = ckks_one_pt::<BE>(dst.base2k())?;
+        self.ckks_add_pt_const_znx_assign_default(dst, 0, &one, 0, scratch)
     }
 
     fn ckks_add_pt_vec_znx_into_default<Dst, A, P>(

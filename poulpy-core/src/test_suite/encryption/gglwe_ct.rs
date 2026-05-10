@@ -111,6 +111,42 @@ where
             }
         }
     }
+
+    let smaller_n = n / 2;
+    if smaller_n > 0 {
+        let dnum: usize = (k_ksk - base2k) / base2k;
+        let gglwe_infos = EncryptionLayout::new_from_default_sigma(GGLWELayout {
+            n: n.into(),
+            base2k: base2k.into(),
+            k: k_ksk.into(),
+            dnum: dnum.into(),
+            dsize: 1_u32.into(),
+            rank_in: 1_u32.into(),
+            rank_out: 1_u32.into(),
+        })
+        .unwrap();
+
+        let mut ksk: GLWESwitchingKey<Vec<u8>> = module.glwe_switching_key_alloc_from_infos(&gglwe_infos);
+        let mut source_xs: Source = Source::new([0u8; 32]);
+        let mut source_xe: Source = Source::new([0u8; 32]);
+        let mut source_xa: Source = Source::new([0u8; 32]);
+        let mut scratch: ScratchOwned<BE> = ScratchOwned::alloc(module.glwe_switching_key_encrypt_sk_tmp_bytes(&gglwe_infos));
+
+        let mut sk_in: GLWESecret<Vec<u8>> = module.glwe_secret_alloc(1_u32.into());
+        sk_in.fill_ternary_prob(0.5, &mut source_xs);
+        let mut sk_out: GLWESecret<Vec<u8>> = GLWESecret::alloc(smaller_n.into(), 1_u32.into());
+        sk_out.fill_ternary_prob(0.5, &mut source_xs);
+
+        module.glwe_switching_key_encrypt_sk(
+            &mut ksk,
+            &sk_in,
+            &sk_out,
+            &gglwe_infos,
+            &mut source_xe,
+            &mut source_xa,
+            &mut scratch.arena(),
+        );
+    }
 }
 
 pub fn test_gglwe_switching_key_compressed_encrypt_sk<BE: crate::test_suite::TestBackend>(
@@ -215,6 +251,44 @@ pub fn test_gglwe_switching_key_compressed_encrypt_sk<BE: crate::test_suite::Tes
                 }
             }
         }
+    }
+
+    let smaller_n = n / 2;
+    if smaller_n > 0 {
+        let dnum: usize = (k_ksk - base2k) / base2k;
+        let gglwe_infos = EncryptionLayout::new_from_default_sigma(GGLWELayout {
+            n: n.into(),
+            base2k: base2k.into(),
+            k: k_ksk.into(),
+            dnum: dnum.into(),
+            dsize: 1_u32.into(),
+            rank_in: 1_u32.into(),
+            rank_out: 1_u32.into(),
+        })
+        .unwrap();
+
+        let mut ksk_compressed: GLWESwitchingKeyCompressed<Vec<u8>> =
+            module.glwe_switching_key_compressed_alloc_from_infos(&gglwe_infos);
+        let mut source_xs: Source = Source::new([0u8; 32]);
+        let mut source_xe: Source = Source::new([0u8; 32]);
+        let seed_xa = [1u8; 32];
+        let mut scratch: ScratchOwned<BE> =
+            ScratchOwned::alloc(module.glwe_switching_key_compressed_encrypt_sk_tmp_bytes(&gglwe_infos));
+
+        let mut sk_in: GLWESecret<Vec<u8>> = module.glwe_secret_alloc(1_u32.into());
+        sk_in.fill_ternary_prob(0.5, &mut source_xs);
+        let mut sk_out: GLWESecret<Vec<u8>> = GLWESecret::alloc(smaller_n.into(), 1_u32.into());
+        sk_out.fill_ternary_prob(0.5, &mut source_xs);
+
+        module.glwe_switching_key_compressed_encrypt_sk(
+            &mut ksk_compressed,
+            &sk_in,
+            &sk_out,
+            seed_xa,
+            &gglwe_infos,
+            &mut source_xe,
+            &mut crate::test_suite::scratch_host_arena(&mut scratch),
+        );
     }
 }
 

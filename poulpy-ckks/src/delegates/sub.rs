@@ -54,6 +54,13 @@ where
         BE::ckks_sub_assign(self, dst, a, scratch)
     }
 
+    fn ckks_sub_one_assign<Dst>(&self, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    where
+        Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
+    {
+        BE::ckks_sub_one_assign(self, dst, scratch)
+    }
+
     fn ckks_sub_pt_vec_znx_into<Dst, A, P>(
         &self,
         dst: &mut Dst,

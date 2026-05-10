@@ -9,6 +9,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    env:
+      POULPY_FEATURES: hal-bench,core-bench,bin-fhe-bench,ckks-bench
+      POULPY_AVX_FEATURES: hal-bench,core-bench,bin-fhe-bench,ckks-bench,enable-avx
 
     steps:
     - name: Checkout
@@ -52,20 +55,20 @@ jobs:
       if: steps.avxcheck.outputs.supported == 'true'
       run: |
         RUSTFLAGS="-C target-feature=+avx2,+fma" \
-        cargo build --workspace --all-targets --features enable-avx
+        cargo build --workspace --all-targets --features "$POULPY_AVX_FEATURES"
 
     - name: Clippy (AVX enabled)
       if: steps.avxcheck.outputs.supported == 'true'
       run: |
         RUSTFLAGS="-C target-feature=+avx2,+fma" \
-        cargo clippy --workspace --all-targets --features enable-avx -- -D warnings
+        cargo clippy --workspace --all-targets --features "$POULPY_AVX_FEATURES" -- -D warnings
 
     - name: Tests (AVX enabled)
       if: steps.avxcheck.outputs.supported == 'true'
       run: |
         RUSTDOCFLAGS="-C target-feature=+avx2 -C target-feature=+fma" \
         RUSTFLAGS="-C target-feature=+avx2,+fma" \
-        cargo test --workspace --features enable-avx
+        cargo test --workspace --features "$POULPY_AVX_FEATURES"
 
     # CKKS test functions are defined in poulpy-ckks/src/test_suite/ and
     # instantiated (via ckks_backend_test_suite!) in poulpy-cpu-ref.
@@ -75,22 +78,22 @@ jobs:
       if: steps.avxcheck.outputs.supported == 'true'
       run: |
         RUSTFLAGS="-C target-feature=+avx2,+fma" \
-        cargo test -p poulpy-cpu-ref
+        cargo test -p poulpy-cpu-ref --features enable-ckks
 
     - name: Build (portable mode)
       if: steps.avxcheck.outputs.supported == 'false'
-      run: cargo build --workspace --all-targets
+      run: cargo build --workspace --all-targets --features "$POULPY_FEATURES"
 
     - name: Clippy (portable mode)
       if: steps.avxcheck.outputs.supported == 'false'
-      run: cargo clippy --workspace --all-targets -- -D warnings
+      run: cargo clippy --workspace --all-targets --features "$POULPY_FEATURES" -- -D warnings
 
     - name: Tests (portable mode)
       if: steps.avxcheck.outputs.supported == 'false'
-      run: cargo test --workspace
+      run: cargo test --workspace --features "$POULPY_FEATURES"
 
     # Same CKKS-focused step for the portable path.
     - name: CKKS test suite (portable mode)
       if: steps.avxcheck.outputs.supported == 'false'
-      run: cargo test -p poulpy-cpu-ref
+      run: cargo test -p poulpy-cpu-ref --features enable-ckks
 

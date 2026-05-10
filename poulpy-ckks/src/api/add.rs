@@ -79,6 +79,14 @@ pub trait CKKSAddOps<BE: Backend + CKKSAddImpl<BE>> {
         Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
         A: GLWEToBackendRef<BE> + CKKSCtBounds;
 
+    /// Computes `dst += 1` in-place.
+    ///
+    /// The exact integer constant is added to coefficient slot `0`.
+    /// Metadata is preserved.
+    fn ckks_add_one_assign<Dst>(&self, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    where
+        Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos;
+
     fn ckks_add_pt_vec_tmp_bytes(&self) -> usize;
 
     /// Computes `dst = a + pt` where `pt` is a full plaintext polynomial.

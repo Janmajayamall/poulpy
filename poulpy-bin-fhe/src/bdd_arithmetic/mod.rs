@@ -72,6 +72,7 @@ pub(crate) use circuits::*;
 pub use eval::*;
 pub use key::*;
 
+#[cfg(all(test, feature = "enable-bin-fhe"))]
 pub mod tests;
 
 /// Marker trait for unsigned integer types whose bits can be encrypted by [`FheUint`].

@@ -170,11 +170,12 @@ pub struct CKKSCiphertextViewMut<'a, BE: Backend + 'a> {
 }
 
 impl<'a, BE: Backend + 'a> CKKSCiphertextViewMut<'a, BE> {
-    pub fn from_inner(inner: GLWEViewMut<'a, BE>, meta: CKKSMeta) -> Self {
+    pub(crate) fn from_inner(inner: GLWEViewMut<'a, BE>, meta: CKKSMeta) -> Self {
         Self { inner, meta }
     }
 
-    pub fn into_inner(self) -> GLWEViewMut<'a, BE> {
+    #[allow(dead_code)]
+    pub(crate) fn into_inner(self) -> GLWEViewMut<'a, BE> {
         self.inner
     }
 }
@@ -256,12 +257,36 @@ pub trait ScratchArenaTakeCKKS<'a, BE: Backend>: ScratchArenaTakeCore<'a, BE> + 
         (CKKSCiphertextViewMut::from_inner(inner, meta), scratch)
     }
 
-    fn take_ckks_ciphertext_like_scratch<D>(self, ct: &CKKSCiphertext<D>) -> (CKKSCiphertextViewMut<'a, BE>, Self)
+    fn take_ckks_ciphertext_like_scratch<C>(self, ct: &C) -> (CKKSCiphertextViewMut<'a, BE>, Self)
     where
         BE: 'a,
-        D: Data,
+        C: GLWEInfos + CKKSInfos,
     {
         self.take_ckks_ciphertext_scratch(ct, ct.meta())
+    }
+
+    fn take_unnormalized_ckks_ciphertext_scratch<I>(
+        self,
+        infos: &I,
+        meta: CKKSMeta,
+    ) -> (UnnormalizedCKKSCiphertext<BE::BufMut<'a>>, Self)
+    where
+        BE: 'a,
+        I: GLWEInfos,
+    {
+        let (inner, scratch) = self.take_glwe_scratch(infos);
+        (
+            UnnormalizedCKKSCiphertext::new(CKKSCiphertext::from_inner(inner.into_inner(), meta)),
+            scratch,
+        )
+    }
+
+    fn take_unnormalized_ckks_ciphertext_like_scratch<C>(self, ct: &C) -> (UnnormalizedCKKSCiphertext<BE::BufMut<'a>>, Self)
+    where
+        BE: 'a,
+        C: GLWEInfos + CKKSInfos,
+    {
+        self.take_unnormalized_ckks_ciphertext_scratch(ct, ct.meta())
     }
 }
 

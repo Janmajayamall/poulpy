@@ -15,7 +15,9 @@
 //! Compiles and runs on any target supported by the Rust standard library.
 //! No platform-specific intrinsics or assembly are used.
 
+#[cfg(feature = "enable-ckks")]
 mod ckks_impl;
+#[cfg(feature = "enable-core")]
 #[doc(hidden)]
 pub mod core_impl;
 pub mod fft64;

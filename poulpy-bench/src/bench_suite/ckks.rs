@@ -489,6 +489,7 @@ pub fn bench_ckks_mul<BE: CkksBenchBackend>(c: &mut Criterion, label: &str) {
                     &mut s.ct_dst,
                     black_box(&s.ct_a),
                     black_box(&s.cst_full_znx),
+                    0,
                     &mut s.scratch.borrow(),
                 )
                 .unwrap();
@@ -546,6 +547,7 @@ pub fn bench_ckks_composite<BE: CkksBenchBackend>(c: &mut Criterion, label: &str
     let many_b: Vec<&CKKSCiphertext<Vec<u8>>> = (0..MANY_TERMS).map(|_| &s.ct_b).collect();
     let pt_znxs: Vec<&_> = (0..MANY_TERMS).map(|_| &s.pt_znx).collect();
     let cst_full_znxs: Vec<&_> = (0..MANY_TERMS).map(|_| &s.cst_full_znx).collect();
+    let pt_coeffs: Vec<usize> = vec![0; MANY_TERMS];
 
     let mut group = c.benchmark_group(format!("ckks_composite::{label}"));
     group.bench_function("add_many_8", |b| {
@@ -626,6 +628,7 @@ pub fn bench_ckks_composite<BE: CkksBenchBackend>(c: &mut Criterion, label: &str
                     &mut s.ct_dst,
                     black_box(&s.ct_a),
                     black_box(&s.cst_full_znx),
+                    0,
                     &mut s.scratch.borrow(),
                 )
                 .unwrap();
@@ -639,6 +642,7 @@ pub fn bench_ckks_composite<BE: CkksBenchBackend>(c: &mut Criterion, label: &str
                     &mut s.ct_dst,
                     black_box(&s.ct_a),
                     black_box(&s.cst_full_znx),
+                    0,
                     &mut s.scratch.borrow(),
                 )
                 .unwrap();
@@ -679,6 +683,7 @@ pub fn bench_ckks_composite<BE: CkksBenchBackend>(c: &mut Criterion, label: &str
                     &mut s.ct_dst,
                     black_box(many_a.as_slice()),
                     black_box(cst_full_znxs.as_slice()),
+                    black_box(pt_coeffs.as_slice()),
                     &mut s.scratch.borrow(),
                 )
                 .unwrap();

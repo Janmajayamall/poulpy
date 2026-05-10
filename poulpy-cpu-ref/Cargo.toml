@@ -9,9 +9,13 @@ repository = "https://github.com/poulpy-fhe/poulpy"
 homepage = "https://github.com/poulpy-fhe/poulpy"
 documentation = "https://docs.rs/poulpy"
 
+[features]
+enable-core = []
+enable-ckks = ["dep:poulpy-ckks", "enable-core"]
+
 [dependencies]
 anyhow = {workspace = true}
-poulpy-ckks = {workspace = true}
+poulpy-ckks = {workspace = true, optional = true}
 poulpy-core = {workspace = true}
 poulpy-hal = {workspace = true}
 dashu-float = {workspace = true}
@@ -31,3 +35,11 @@ f128 = "0.2"
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[[example]]
+name = "ckks_poly2"
+required-features = ["enable-ckks"]
+
+[[example]]
+name = "core_encryption"
+required-features = ["enable-core"]

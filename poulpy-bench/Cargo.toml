@@ -10,14 +10,14 @@ publish = false
 readme = "README.md"
 
 [features]
+hal-bench = []
+core-bench = ["poulpy-cpu-ref/enable-core"]
+bin-fhe-bench = ["core-bench"]
 enable-avx = [
     "dep:poulpy-cpu-avx",
     "poulpy-cpu-avx/enable-avx",
-    "poulpy-core/enable-avx",
-    "poulpy-bin-fhe/enable-avx",
-    "poulpy-ckks?/enable-avx",
 ]
-ckks-bench = ["dep:poulpy-ckks"]
+ckks-bench = ["core-bench", "dep:poulpy-ckks", "poulpy-cpu-ref/enable-ckks"]
 # enable-gpu = ["dep:poulpy-gpu", "poulpy-gpu/enable-gpu"]
 
 [dependencies]
@@ -36,54 +36,67 @@ poulpy-cpu-avx = {workspace = true, optional = true}
 [[bench]]
 name = "vec_znx"
 harness = false
+required-features = ["hal-bench"]
 
 [[bench]]
 name = "vec_znx_big"
 harness = false
+required-features = ["hal-bench"]
 
 [[bench]]
 name = "vec_znx_dft"
 harness = false
+required-features = ["hal-bench"]
 
 [[bench]]
 name = "svp"
 harness = false
+required-features = ["hal-bench"]
 
 [[bench]]
 name = "vmp"
 harness = false
+required-features = ["hal-bench"]
 
 [[bench]]
 name = "convolution"
 harness = false
+required-features = ["hal-bench"]
 
 [[bench]]
 name = "fft"
 harness = false
+required-features = ["hal-bench"]
 
 [[bench]]
 name = "ntt"
 harness = false
+required-features = ["hal-bench"]
 
 [[bench]]
 name = "operations"
 harness = false
+required-features = ["core-bench"]
 
 [[bench]]
 name = "encryption"
 harness = false
+required-features = ["core-bench"]
 
 [[bench]]
 name = "decryption"
 harness = false
+required-features = ["core-bench"]
 
 [[bench]]
 name = "external_product"
 harness = false
+required-features = ["core-bench"]
 
 [[bench]]
 name = "glwe_tensor"
 harness = false
+required-features = ["core-bench"]
 
 [[bench]]
 name = "ckks_composite"
@@ -118,27 +131,34 @@ required-features = ["ckks-bench"]
 [[bench]]
 name = "automorphism"
 harness = false
+required-features = ["core-bench"]
 
 [[bench]]
 name = "keyswitch"
 harness = false
+required-features = ["core-bench"]
 
 [[bench]]
 name = "blind_rotate"
 harness = false
+required-features = ["bin-fhe-bench"]
 
 [[bench]]
 name = "circuit_bootstrapping"
 harness = false
+required-features = ["bin-fhe-bench"]
 
 [[bench]]
 name = "bdd_arithmetic"
 harness = false
+required-features = ["bin-fhe-bench"]
 
 [[bench]]
 name = "bdd_prepare"
 harness = false
+required-features = ["bin-fhe-bench"]
 
 [[bench]]
 name = "standard"
 harness = false
+required-features = ["hal-bench", "core-bench", "bin-fhe-bench"]

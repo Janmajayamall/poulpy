@@ -39,7 +39,7 @@ mod key;
 mod key_compressed;
 mod key_prepared;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "enable-bin-fhe"))]
 pub mod tests;
 
 pub(crate) fn trace_galois_elements(log_n: usize, cyclotomic_order: i64) -> Vec<i64> {

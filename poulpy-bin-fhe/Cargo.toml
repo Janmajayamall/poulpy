@@ -10,7 +10,12 @@ homepage = "https://github.com/poulpy-fhe/poulpy"
 documentation = "https://docs.rs/poulpy"
 
 [features]
-enable-avx = ["dep:poulpy-cpu-avx", "poulpy-cpu-avx/enable-avx", "poulpy-core/enable-avx"]
+enable-bin-fhe = ["poulpy-cpu-ref/enable-core"]
+enable-avx = [
+    "enable-bin-fhe",
+    "dep:poulpy-cpu-avx",
+    "poulpy-cpu-avx/enable-avx",
+]
 
 [dependencies]
 poulpy-cpu-avx = {workspace = true, optional = true}
@@ -22,3 +27,15 @@ byteorder = {workspace = true}
 rand = {workspace = true}
 paste = {workspace = true}
 anyhow = {workspace = true}
+
+[[example]]
+name = "bdd_arithmetic"
+required-features = ["enable-bin-fhe"]
+
+[[example]]
+name = "circuit_bootstrapping"
+required-features = ["enable-bin-fhe"]
+
+[[example]]
+name = "max_array"
+required-features = ["enable-bin-fhe"]

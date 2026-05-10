@@ -89,11 +89,13 @@ This branch completes the migration from the legacy host-oriented HAL/backend pl
 - Remove remaining direct layout-field assumptions from benchmark staging helpers.
 - Add shared host-upload/randomization helpers and `ModuleTransfer`-based typed uploads so benchmark fixtures can be staged on arbitrary backends without reaching into raw layout internals.
 - Make CKKS benchmarks opt-in behind a new `ckks-bench` feature and gate the CKKS bench targets with `required-features`, so default bench runs do not pull CKKS support unless requested.
+- Split benchmark opt-ins by family (`hal-bench`, `core-bench`, `bin-fhe-bench`, and `ckks-bench`) instead of gating every benchmark target behind one monolithic bench feature.
 - Export new benchmark-support helpers for backend-generic staging: `upload_host_*`, `random_host_*`, `random_backend_*`, and `*_backend_ref/mut` adapters for raw HAL/core objects.
 
 ### Build & Docs
 - Refresh root and crate READMEs (naming, examples, links, and architecture guidance); document the shared `api` / `oep` / `delegates` / `default` layering and backend-integration flow across the workspace.
 - Extend CI with dedicated CKKS-focused `poulpy-cpu-ref` test steps in both AVX-enabled and portable configurations.
+- Move higher-level feature gating to backend-owned integration features while keeping scheme crate APIs available when their crates are imported; update CI to enable the backend and benchmark feature set explicitly.
 - Add acknowledgements for PZ, EF, and ENS in the root README.
 
 ### Fixes

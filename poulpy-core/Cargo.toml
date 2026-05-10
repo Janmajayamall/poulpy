@@ -10,6 +10,7 @@ documentation = "https://docs.rs/poulpy"
 
 [features]
 default = []
+enable-core = []
 enable-avx = []
 
 [dependencies]

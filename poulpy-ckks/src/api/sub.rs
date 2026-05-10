@@ -58,6 +58,14 @@ pub trait CKKSSubOps<BE: Backend + CKKSSubImpl<BE>> {
         Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
         A: GLWEToBackendRef<BE> + CKKSCtBounds;
 
+    /// Computes `dst -= 1` in-place.
+    ///
+    /// The exact integer constant is subtracted from coefficient slot `0`.
+    /// Metadata is preserved.
+    fn ckks_sub_one_assign<Dst>(&self, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    where
+        Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos;
+
     /// Computes `dst = a - pt_znx` where `pt_znx` is a full plaintext polynomial.
     fn ckks_sub_pt_vec_znx_into<Dst, A, P>(
         &self,

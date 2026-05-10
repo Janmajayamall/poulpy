@@ -1,3 +1,10 @@
+#![cfg(any(
+    feature = "hal-bench",
+    feature = "core-bench",
+    feature = "bin-fhe-bench",
+    feature = "ckks-bench"
+))]
+
 //! Shared helpers for `poulpy-bench` benchmark binaries.
 //!
 //! # Public dispatch macros
@@ -31,19 +38,23 @@
 pub mod bench_suite;
 pub mod params;
 
+#[cfg(any(feature = "core-bench", feature = "bin-fhe-bench", feature = "ckks-bench"))]
 use poulpy_core::{
     api::ModuleTransfer,
     layouts::{GGSW, GLWE, GLWEPlaintext, LWE, LWESecret},
 };
 use poulpy_hal::layouts::{
-    Backend, CnvPVecL, CnvPVecR, DataView, MatZnx, MatZnxBackendRef, MatZnxToBackendRef, Module, ScalarZnx, ScalarZnxBackendRef,
-    ScalarZnxToBackendRef, SvpPPol, TransferFrom, VecZnx, VecZnxBackendMut, VecZnxBackendRef, VecZnxBig, VecZnxBigBackendMut,
+    Backend, CnvPVecL, CnvPVecR, DataView, MatZnx, MatZnxBackendRef, MatZnxToBackendRef, ScalarZnx, ScalarZnxBackendRef,
+    ScalarZnxToBackendRef, SvpPPol, VecZnx, VecZnxBackendMut, VecZnxBackendRef, VecZnxBig, VecZnxBigBackendMut,
     VecZnxBigBackendRef, VecZnxBigToBackendMut, VecZnxBigToBackendRef, VecZnxDft, VecZnxDftBackendMut, VecZnxDftBackendRef,
     VecZnxDftToBackendMut, VecZnxDftToBackendRef, VecZnxToBackendMut, VecZnxToBackendRef, VmpPMat,
 };
+#[cfg(any(feature = "core-bench", feature = "bin-fhe-bench", feature = "ckks-bench"))]
+use poulpy_hal::layouts::{Module, TransferFrom};
 use poulpy_hal::source::Source;
 use rand::Rng;
 
+#[cfg(any(feature = "core-bench", feature = "bin-fhe-bench", feature = "ckks-bench"))]
 type BenchHostBackend = poulpy_cpu_ref::FFT64Ref;
 
 /// Return the shared Criterion configuration used by all bench binaries.
@@ -208,6 +219,7 @@ pub fn vec_znx_big_backend_mut<'a, BE: Backend>(src: &'a mut VecZnxBig<BE::Owned
     <VecZnxBig<BE::OwnedBuf, BE> as VecZnxBigToBackendMut<BE>>::to_backend_mut(src)
 }
 
+#[cfg(any(feature = "core-bench", feature = "bin-fhe-bench", feature = "ckks-bench"))]
 pub fn upload_host_glwe<BE>(module: &Module<BE>, src: &GLWE<Vec<u8>>) -> GLWE<BE::OwnedBuf>
 where
     BE: Backend + TransferFrom<BenchHostBackend>,
@@ -216,6 +228,7 @@ where
     module.upload_glwe::<BenchHostBackend>(src)
 }
 
+#[cfg(any(feature = "core-bench", feature = "bin-fhe-bench", feature = "ckks-bench"))]
 pub fn upload_host_lwe<BE>(module: &Module<BE>, src: &LWE<Vec<u8>>) -> LWE<BE::OwnedBuf>
 where
     BE: Backend + TransferFrom<BenchHostBackend>,
@@ -224,6 +237,7 @@ where
     module.upload_lwe::<BenchHostBackend>(src)
 }
 
+#[cfg(any(feature = "core-bench", feature = "bin-fhe-bench", feature = "ckks-bench"))]
 pub fn upload_host_lwe_secret<BE>(module: &Module<BE>, src: &LWESecret<Vec<u8>>) -> LWESecret<BE::OwnedBuf>
 where
     BE: Backend + TransferFrom<BenchHostBackend>,
@@ -232,6 +246,7 @@ where
     module.upload_lwe_secret::<BenchHostBackend>(src)
 }
 
+#[cfg(any(feature = "core-bench", feature = "bin-fhe-bench", feature = "ckks-bench"))]
 pub fn upload_host_glwe_plaintext<BE>(module: &Module<BE>, src: &GLWEPlaintext<Vec<u8>>) -> GLWEPlaintext<BE::OwnedBuf>
 where
     BE: Backend + TransferFrom<BenchHostBackend>,
@@ -240,6 +255,7 @@ where
     module.upload_glwe_plaintext::<BenchHostBackend>(src)
 }
 
+#[cfg(any(feature = "core-bench", feature = "bin-fhe-bench", feature = "ckks-bench"))]
 pub fn upload_host_ggsw<BE>(module: &Module<BE>, src: &GGSW<Vec<u8>>) -> GGSW<BE::OwnedBuf>
 where
     BE: Backend + TransferFrom<BenchHostBackend>,

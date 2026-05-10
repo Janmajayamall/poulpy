@@ -49,6 +49,13 @@ where
         BE::ckks_add_assign(self, dst, a, scratch)
     }
 
+    fn ckks_add_one_assign<Dst>(&self, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    where
+        Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
+    {
+        BE::ckks_add_one_assign(self, dst, scratch)
+    }
+
     fn ckks_add_pt_vec_tmp_bytes(&self) -> usize {
         BE::ckks_add_pt_vec_znx_tmp_bytes(self)
     }

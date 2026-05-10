@@ -176,6 +176,8 @@ mod fft64;
 mod hal_impl;
 #[cfg(feature = "enable-avx")]
 mod ntt120;
+#[cfg(all(test, feature = "enable-avx", feature = "enable-ckks"))]
+mod tests;
 #[cfg(feature = "enable-avx")]
 mod znx_avx;
 

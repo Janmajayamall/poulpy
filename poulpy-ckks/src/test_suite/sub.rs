@@ -293,3 +293,17 @@ pub fn test_sub_pt_const_znx_into_aligned<BE: Backend, F: TestScalar, E: Negacyc
         &mut scratch.borrow(),
     );
 }
+
+pub fn test_sub_one_assign<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+    let mut scratch = ctx.alloc_scratch();
+    let mut ct = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
+    let want_re: Vec<F> = ctx.re1.iter().map(|x| *x - F::one()).collect();
+    let want_im = ctx.im1.clone();
+    let expected_log_delta = ct.log_delta();
+    let expected_log_budget = ct.log_budget();
+
+    ctx.module.ckks_sub_one_assign(&mut ct, &mut scratch.borrow()).unwrap();
+
+    assert_ct_meta("sub_one_assign", &ct, expected_log_delta, expected_log_budget);
+    ctx.assert_decrypt_precision("sub_one_assign", &ct, &want_re, &want_im, &mut scratch.borrow());
+}

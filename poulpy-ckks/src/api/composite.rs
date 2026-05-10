@@ -5,10 +5,13 @@ use poulpy_core::layouts::{
 };
 use poulpy_hal::layouts::{Backend, Data, ScratchArena};
 
-use crate::{CKKSCtBounds, CKKSInfos, layouts::CKKSCiphertext, oep::CKKSImpl};
+use crate::{
+    CKKSCtBounds, CKKSInfos,
+    layouts::{CKKSCiphertext, UnnormalizedCKKSCiphertext},
+};
 
 /// Tree-reduction sum over a slice of ciphertexts.
-pub trait CKKSAddManyOps<BE: Backend + CKKSImpl<BE>> {
+pub trait CKKSAddManyOps<BE: Backend> {
     fn ckks_add_many_tmp_bytes(&self) -> usize;
 
     /// Computes `dst = inputs[0] + inputs[1] + … + inputs[n-1]` using a
@@ -44,7 +47,7 @@ pub trait CKKSAddManyOps<BE: Backend + CKKSImpl<BE>> {
 }
 
 /// Tree-reduction product over a slice of ciphertexts.
-pub trait CKKSMulManyOps<BE: Backend + CKKSImpl<BE>> {
+pub trait CKKSMulManyOps<BE: Backend> {
     fn ckks_mul_many_tmp_bytes<R, T>(&self, n: usize, res: &R, tsk: &T) -> usize
     where
         R: CKKSCtBounds,
@@ -89,7 +92,7 @@ pub trait CKKSMulManyOps<BE: Backend + CKKSImpl<BE>> {
 ///
 /// Each variant computes the product of two operands and adds it to `dst`
 /// without a separate allocation for the intermediate product.
-pub trait CKKSMulAddOps<BE: Backend + CKKSImpl<BE>> {
+pub trait CKKSMulAddOps<BE: Backend> {
     fn ckks_mul_add_ct_tmp_bytes<R, T>(&self, res: &R, tsk: &T) -> usize
     where
         R: CKKSCtBounds,
@@ -180,6 +183,42 @@ pub trait CKKSMulAddOps<BE: Backend + CKKSImpl<BE>> {
         CKKSCiphertext<Dst>: GLWEToBackendMut<BE>,
         CKKSCiphertext<A>: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
+
+    /// Computes `dst += a * pt_znx[pt_coeff]` without normalizing `dst`.
+    ///
+    /// The accumulator `dst` carries un-propagated carries in its limb digits.
+    /// Use this to fuse several multiply-add steps before a single
+    /// [`UnnormalizedCKKSCiphertext::normalize`] call.  See
+    /// [`crate::api::CKKSAddOpsUnnormalized`] for the digit-growth analysis
+    /// and safety bound.
+    fn ckks_mul_add_pt_const_znx_into_unnormalized<Dst: Data, A, P>(
+        &self,
+        dst: &mut UnnormalizedCKKSCiphertext<Dst>,
+        a: &A,
+        pt_znx: &P,
+        pt_coeff: usize,
+        scratch: &mut ScratchArena<'_, BE>,
+    ) -> Result<()>
+    where
+        CKKSCiphertext<Dst>: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE> + CKKSCtBounds,
+        P: GLWEToBackendRef<BE> + CKKSCtBounds;
+
+    /// Computes `dst += a * pt_znx` without normalizing `dst`.
+    ///
+    /// Metadata follows the same rule as
+    /// [`Self::ckks_mul_add_pt_const_znx_into_unnormalized`].
+    fn ckks_mul_add_pt_vec_znx_into_unnormalized<Dst: Data, A, P>(
+        &self,
+        dst: &mut UnnormalizedCKKSCiphertext<Dst>,
+        a: &A,
+        pt_znx: &P,
+        scratch: &mut ScratchArena<'_, BE>,
+    ) -> Result<()>
+    where
+        CKKSCiphertext<Dst>: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE> + CKKSCtBounds,
+        P: GLWEToBackendRef<BE> + CKKSCtBounds;
 }
 
 /// Fused affine evaluation: `dst = a * scale + offset`.
@@ -187,7 +226,7 @@ pub trait CKKSMulAddOps<BE: Backend + CKKSImpl<BE>> {
 /// Combines a plaintext multiplication followed by a plaintext addition.
 /// Both `scale` and `offset` must be CKKS plaintexts compatible with the
 /// ciphertext's remaining capacity.
-pub trait CKKSAffineOps<BE: Backend + CKKSImpl<BE>> {
+pub trait CKKSAffineOps<BE: Backend> {
     fn ckks_affine_pt_const_tmp_bytes<R, A, P>(&self, res: &R, a: &A, affine_const: &P) -> usize
     where
         R: CKKSCtBounds,
@@ -314,7 +353,7 @@ pub trait CKKSAffineOps<BE: Backend + CKKSImpl<BE>> {
 }
 
 /// Fused multiply-subtract: `dst -= a * b`.
-pub trait CKKSMulSubOps<BE: Backend + CKKSImpl<BE>> {
+pub trait CKKSMulSubOps<BE: Backend> {
     fn ckks_mul_sub_ct_tmp_bytes<R, T>(&self, res: &R, tsk: &T) -> usize
     where
         R: CKKSCtBounds,
@@ -387,7 +426,7 @@ pub trait CKKSMulSubOps<BE: Backend + CKKSImpl<BE>> {
 /// Inner product (dot product) of ciphertext and plaintext slices.
 ///
 /// Computes the weighted sum `dst = Σ a[i] * b[i]` over all pairs.
-pub trait CKKSDotProductOps<BE: Backend + CKKSImpl<BE>> {
+pub trait CKKSDotProductOps<BE: Backend> {
     fn ckks_dot_product_ct_tmp_bytes<R, T>(&self, n: usize, res: &R, tsk: &T) -> usize
     where
         R: CKKSCtBounds,

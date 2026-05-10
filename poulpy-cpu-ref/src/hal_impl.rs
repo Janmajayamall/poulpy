@@ -28,7 +28,7 @@ mod vec_znx_big;
 mod svp;
 #[macro_use]
 mod vec_znx_dft;
-#[cfg(test)]
+#[cfg(all(test, feature = "enable-core"))]
 pub(crate) mod delegating_backend;
 
 unsafe impl HalVecZnxImpl<FFT64Ref> for FFT64Ref {

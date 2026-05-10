@@ -5,7 +5,9 @@ use poulpy_hal::{
 
 use crate::{FFT64Ref, NTT120Ref};
 
+#[cfg(feature = "enable-ckks")]
 mod ckks_tests;
+#[cfg(feature = "enable-core")]
 mod delegating_backend;
 
 #[test]
@@ -171,12 +173,14 @@ backend_test_suite! {
     }
 }
 
+#[cfg(feature = "enable-core")]
 poulpy_core::core_backend_test_suite!(
     mod fft64,
     backend = crate::FFT64Ref,
     params = TestParams { size: 1<<8, base2k: 17 },
 );
 
+#[cfg(feature = "enable-core")]
 poulpy_core::core_backend_test_suite!(
     mod ntt120,
     backend = crate::NTT120Ref,

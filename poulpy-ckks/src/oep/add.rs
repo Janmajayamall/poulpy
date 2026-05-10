@@ -31,6 +31,9 @@ pub unsafe trait CKKSAddImpl<BE: Backend>: Backend {
     where
         Dst: GLWEToBackendMut<BE> + CKKSInfos + SetCKKSInfos,
         A: GLWEToBackendRef<BE> + CKKSInfos;
+    fn ckks_add_one_assign<Dst>(module: &Module<BE>, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    where
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos;
     fn ckks_add_pt_vec_znx_tmp_bytes(module: &Module<BE>) -> usize;
     fn ckks_add_pt_vec_znx_into<Dst, A, P>(
         module: &Module<BE>,
@@ -117,6 +120,13 @@ where
         A: GLWEToBackendRef<BE> + CKKSInfos,
     {
         module.ckks_add_assign_default(dst, a, scratch)
+    }
+
+    fn ckks_add_one_assign<Dst>(module: &Module<BE>, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    where
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos,
+    {
+        module.ckks_add_one_assign_default(dst, scratch)
     }
 
     fn ckks_add_pt_vec_znx_tmp_bytes(module: &Module<BE>) -> usize {

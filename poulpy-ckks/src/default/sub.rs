@@ -10,7 +10,7 @@ use poulpy_hal::{
 
 use crate::{
     CKKSInfos, CKKSMeta, GLWEToBackendRef, SetCKKSInfos, checked_log_budget_sub, ckks_offset_binary, ckks_offset_unary,
-    leveled::default::CKKSPlaintextDefault,
+    default::add::ckks_one_pt, leveled::default::CKKSPlaintextDefault,
 };
 
 pub trait CKKSSubDefault<BE: Backend> {
@@ -132,6 +132,16 @@ pub trait CKKSSubDefault<BE: Backend> {
         dst.set_log_budget(dst_log_budget.min(a.log_budget()));
         dst.set_log_delta(dst.log_delta().min(a.log_delta()));
         Ok(())
+    }
+
+    fn ckks_sub_one_assign_default<Dst>(&self, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    where
+        Self: VecZnxRshSubCoeffIntoBackend<BE> + CKKSPlaintextDefault<BE> + GLWENormalize<BE>,
+        Dst: GLWEToBackendMut<BE> + CKKSInfos + LWEInfos,
+        for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
+    {
+        let one = ckks_one_pt::<BE>(dst.base2k())?;
+        self.ckks_sub_pt_const_znx_assign_default(dst, 0, &one, 0, scratch)
     }
 
     fn ckks_sub_pt_vec_znx_into_default<Dst, A, P>(

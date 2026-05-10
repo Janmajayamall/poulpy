@@ -120,6 +120,28 @@ poulpy-cpu-ref = "0.5"
 * Architecture diagrams and design notes live in the [`/docs`](./docs) folder.
 * Crate-specific READMEs provide more focused usage notes, especially [`poulpy-ckks`](./poulpy-ckks/README.md) and [`poulpy-bench`](./poulpy-bench/README.md).
 
+## Testing Backend-Gated Integrations
+
+Scheme crate APIs are available when those crates are imported. Backend-owned
+integration tests remain feature-gated so default workspace builds stay light:
+
+```sh
+cargo test -p poulpy-core
+cargo test -p poulpy-ckks
+cargo test -p poulpy-cpu-ref --features enable-core
+cargo test -p poulpy-cpu-ref --features enable-ckks
+cargo test -p poulpy-bin-fhe --features enable-bin-fhe
+```
+
+Benchmark targets are split by family:
+
+```sh
+cargo check -p poulpy-bench --all-targets --features hal-bench
+cargo check -p poulpy-bench --all-targets --features core-bench
+cargo check -p poulpy-bench --all-targets --features bin-fhe-bench
+cargo check -p poulpy-bench --all-targets --features ckks-bench
+```
+
 ## Contributing
 
 We welcome external contributions, please see [CONTRIBUTING](./CONTRIBUTING.md).

@@ -10,6 +10,7 @@ homepage = "https://github.com/poulpy-fhe/poulpy"
 documentation = "https://docs.rs/poulpy-ckks"
 
 [features]
+enable-ckks = []
 enable-avx = []
 
 [dependencies]

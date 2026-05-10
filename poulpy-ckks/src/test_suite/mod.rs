@@ -224,6 +224,7 @@ macro_rules! ckks_backend_test_suite {
                 $crate::test_suite::add::test_add_const_into_aligned
             );
             run_test!(add_const_assign, $crate::test_suite::add::test_add_const_assign);
+            run_test!(add_one_assign, $crate::test_suite::add::test_add_one_assign);
             run_test!(
                 add_const_into_delta_log_delta,
                 $crate::test_suite::add::test_add_const_into_delta_log_delta
@@ -300,6 +301,7 @@ macro_rules! ckks_backend_test_suite {
                 sub_pt_const_znx_into_aligned,
                 $crate::test_suite::sub::test_sub_pt_const_znx_into_aligned
             );
+            run_test!(sub_one_assign, $crate::test_suite::sub::test_sub_one_assign);
             run_test!(
                 sub_ct_aligned_unsafe,
                 $crate::test_suite::sub_unsafe::test_sub_ct_aligned_unsafe
