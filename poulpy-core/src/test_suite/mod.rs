@@ -143,11 +143,7 @@ where
     module.upload_glwe::<HB>(src)
 }
 
-pub fn download_glwe<BE: HostBackend<OwnedBuf = Vec<u8>>>(_module: &Module<BE>, src: &GLWE<BE::OwnedBuf>) -> GLWE<Vec<u8>>
-where
-    HostModule: ModuleTransfer<HB>,
-    HB: poulpy_hal::layouts::TransferFrom<BE>,
-{
+pub fn download_glwe<BE: HostBackend<OwnedBuf = Vec<u8>>>(_module: &Module<BE>, src: &GLWE<BE::OwnedBuf>) -> GLWE<Vec<u8>> {
     let shape = src.data.shape();
     GLWE {
         data: poulpy_hal::layouts::VecZnx::from_data_with_max_size(
@@ -174,11 +170,7 @@ where
 pub fn download_glwe_plaintext<BE: HostBackend<OwnedBuf = Vec<u8>>>(
     _module: &Module<BE>,
     src: &GLWEPlaintext<BE::OwnedBuf>,
-) -> GLWEPlaintext<Vec<u8>>
-where
-    HostModule: ModuleTransfer<HB>,
-    HB: poulpy_hal::layouts::TransferFrom<BE>,
-{
+) -> GLWEPlaintext<Vec<u8>> {
     let shape = src.data.shape();
     GLWEPlaintext {
         data: poulpy_hal::layouts::VecZnx::from_data_with_max_size(
@@ -216,11 +208,7 @@ where
     module.upload_ggsw::<HB>(src)
 }
 
-pub fn download_ggsw<BE: HostBackend<OwnedBuf = Vec<u8>>>(_module: &Module<BE>, src: &GGSW<BE::OwnedBuf>) -> GGSW<Vec<u8>>
-where
-    HostModule: ModuleTransfer<HB>,
-    HB: poulpy_hal::layouts::TransferFrom<BE>,
-{
+pub fn download_ggsw<BE: HostBackend<OwnedBuf = Vec<u8>>>(_module: &Module<BE>, src: &GGSW<BE::OwnedBuf>) -> GGSW<Vec<u8>> {
     GGSW {
         data: poulpy_hal::layouts::MatZnx::from_data(
             BE::to_host_bytes(src.data.data()),

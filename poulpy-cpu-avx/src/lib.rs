@@ -185,3 +185,58 @@ mod znx_avx;
 pub use fft64::{FFT64Avx, FFT64AvxReimTable, ReimFFTAvx, ReimIFFTAvx};
 #[cfg(feature = "enable-avx")]
 pub use ntt120::NTT120Avx;
+
+// --- TransferFrom impls ---
+#[cfg(feature = "enable-avx")]
+mod transfer_impls {
+    use poulpy_hal::layouts::{Backend, TransferFrom};
+    use poulpy_cpu_ref::{FFT64Ref, NTT120Ref};
+
+    use crate::{FFT64Avx, NTT120Avx};
+
+    impl TransferFrom<FFT64Avx> for FFT64Avx {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            FFT64Avx::from_host_bytes(&FFT64Avx::to_host_bytes(src))
+        }
+    }
+    impl TransferFrom<FFT64Ref> for FFT64Avx {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            FFT64Avx::from_host_bytes(&FFT64Ref::to_host_bytes(src))
+        }
+    }
+
+    impl TransferFrom<NTT120Avx> for NTT120Avx {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            NTT120Avx::from_host_bytes(&NTT120Avx::to_host_bytes(src))
+        }
+    }
+    impl TransferFrom<NTT120Ref> for NTT120Avx {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            NTT120Avx::from_host_bytes(&NTT120Ref::to_host_bytes(src))
+        }
+    }
+
+    // Cross-family: coefficient-domain buffers are compatible.
+    // Prepared layouts must not be transferred directly; transfer the
+    // non-prepared form and re-prepare on the destination backend.
+    impl TransferFrom<NTT120Ref> for FFT64Avx {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            FFT64Avx::from_host_bytes(&NTT120Ref::to_host_bytes(src))
+        }
+    }
+    impl TransferFrom<NTT120Avx> for FFT64Avx {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            FFT64Avx::from_host_bytes(&NTT120Avx::to_host_bytes(src))
+        }
+    }
+    impl TransferFrom<FFT64Ref> for NTT120Avx {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            NTT120Avx::from_host_bytes(&FFT64Ref::to_host_bytes(src))
+        }
+    }
+    impl TransferFrom<FFT64Avx> for NTT120Avx {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            NTT120Avx::from_host_bytes(&FFT64Avx::to_host_bytes(src))
+        }
+    }
+}

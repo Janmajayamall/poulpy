@@ -77,6 +77,7 @@ This branch completes the migration from the legacy host-oriented HAL/backend pl
 - Update bin-FHE BDD arithmetic, blind rotation, and test suites for the new core/HAL APIs.
 - Refresh blind-rotation / circuit-bootstrapping staging helpers for the new `ScalarZnx` view API.
 - Refresh scheme examples and library wiring to match the crate split and the new backend-generic APIs.
+- **Note:** `poulpy-bin-fhe` is not yet backend agnostic: it still depends unconditionally on `poulpy-cpu-ref` and exposes host `Vec<u8>` / `HostBackend` bounds in several public APIs. Full backend-agnosticity for this crate is deferred to a follow-up.
 - **Breaking:** Bin-FHE traits and helpers now follow the backend-owned core/HAL surface: methods take `ScratchArena<'_, BE>`, use `...ToBackendRef<BE>` / `...ToBackendMut<BE>` bounds for ciphertexts and prepared keys, and many generic entrypoints now require `BE: Backend<OwnedBuf = Vec<u8>>` plus `ModuleCoreAlloc`.
 - Move public constructors/allocation helpers to module-first forms across the crate: `FheUint::alloc[_from_infos](module, ...)`, `LookupTable::alloc(module, ...)`, `GLWEBlindRetriever::alloc(module, ...)`, and `CircuitBootstrappingKey::alloc_from_infos(module, ...)`.
 - Add `LookupTable::to_backend` for explicit backend transfer of LUT storage and keep prepared blind-rotation / circuit-bootstrapping factories on backend-owned output types via `ScratchArena`.

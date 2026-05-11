@@ -45,3 +45,36 @@ pub mod source {
 
 pub use fft64::{FFT64Ref, FFT64ReimTable};
 pub use ntt120::{NTT120Ref, NTT120RefHandle};
+
+// --- TransferFrom impls ---
+mod transfer_impls {
+    use poulpy_hal::layouts::{Backend, TransferFrom};
+
+    use crate::{FFT64Ref, NTT120Ref};
+
+    impl TransferFrom<FFT64Ref> for FFT64Ref {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            FFT64Ref::from_host_bytes(&FFT64Ref::to_host_bytes(src))
+        }
+    }
+
+    impl TransferFrom<NTT120Ref> for NTT120Ref {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            NTT120Ref::from_host_bytes(&NTT120Ref::to_host_bytes(src))
+        }
+    }
+
+    // Cross-family: coefficient-domain buffers are compatible (plain i64 data).
+    // Prepared layouts are backend-specific and must not be transferred directly;
+    // transfer the non-prepared form and re-prepare on the destination backend.
+    impl TransferFrom<NTT120Ref> for FFT64Ref {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            FFT64Ref::from_host_bytes(&NTT120Ref::to_host_bytes(src))
+        }
+    }
+    impl TransferFrom<FFT64Ref> for NTT120Ref {
+        fn transfer_buf(src: &Vec<u8>) -> Vec<u8> {
+            NTT120Ref::from_host_bytes(&FFT64Ref::to_host_bytes(src))
+        }
+    }
+}

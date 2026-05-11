@@ -281,23 +281,26 @@ pub type OwnedBuf<BE> = <BE as Backend>::OwnedBuf;
 /// This is intentionally destination-owned so the canonical public API can
 /// hang off `Module<To>` as `upload_*` / `download_*`.
 ///
-/// The default v1 implementation is provided only for host backends that
-/// both use `Vec<u8>` storage. Device backends are expected to add explicit
-/// impls for their supported source backends.
+/// Each concrete backend pair must provide an explicit impl. Two restricted
+/// blankets are provided for [`HostBytesBackend`] so that test/bench helpers
+/// that use it as a staging type continue to work without boilerplate:
+/// - any host `Vec<u8>` backend → `HostBytesBackend`
+/// - `HostBytesBackend` → any host `Vec<u8>` backend
+///
+/// All other backend-to-backend transfers (e.g. `FFT64Ref` ↔ `NTT120Ref`,
+/// `FFT64Ref` → `FFT64Avx`) must be implemented explicitly in the respective
+/// backend crates.
 pub trait TransferFrom<From: Backend>: Backend {
     /// Transfers a buffer owned by `From` into `Self`.
     fn transfer_buf(src: &From::OwnedBuf) -> Self::OwnedBuf;
 }
 
-impl<From, To> TransferFrom<From> for To
-where
-    From: Backend<Location = Host, OwnedBuf = Vec<u8>>,
-    To: Backend<Location = Host, OwnedBuf = Vec<u8>>,
-{
-    fn transfer_buf(src: &From::OwnedBuf) -> Self::OwnedBuf {
-        To::from_host_bytes(&From::to_host_bytes(src))
+impl<T: Backend<Location = Host, OwnedBuf = Vec<u8>>> TransferFrom<HostBytesBackend> for T {
+    fn transfer_buf(src: &Vec<u8>) -> Self::OwnedBuf {
+        T::from_host_bytes(src)
     }
 }
+
 
 /// Implement a backend marker by forwarding all storage- and handle-level
 /// behavior to an existing backend.
