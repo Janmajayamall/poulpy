@@ -17,8 +17,8 @@ use crate::{
     CKKSCompositionError, CKKSInfos, CKKSMeta, SetCKKSInfos,
     api::{
         CKKSAddManyOps, CKKSAddOps, CKKSAddOpsUnnormalized, CKKSAffineOps, CKKSAllOpsTmpBytes, CKKSConjugateOps, CKKSCopyOps,
-        CKKSDotProductOps, CKKSImagOps, CKKSMulAddOps, CKKSMulManyOps, CKKSMulOps, CKKSMulSubOps, CKKSNegOps,
-        CKKSPlaintextVecOps, CKKSPow2Ops, CKKSRotateOps, CKKSSubOps, CKKSSubOpsUnnormalized,
+        CKKSDotProductOps, CKKSImagOps, CKKSMulAddOps, CKKSMulOps, CKKSMulSubOps, CKKSNegOps, CKKSPlaintextVecOps, CKKSPow2Ops,
+        CKKSRotateOps, CKKSSubOps, CKKSSubOpsUnnormalized,
     },
     encoding::reim::Encoder,
     layouts::{CKKSCiphertext, CKKSModuleAlloc, CKKSPlaintextVecHostCodec, ciphertext::CKKSOffset, plaintext::CKKSPlaintext},
@@ -96,7 +96,6 @@ pub trait TestContextModule<BE: Backend>:
     + CKKSPow2Ops<BE>
     + CKKSPlaintextVecOps<BE>
     + CKKSAddManyOps<BE>
-    + CKKSMulManyOps<BE>
     + CKKSMulAddOps<BE>
     + CKKSMulSubOps<BE>
     + CKKSAffineOps<BE>
@@ -132,7 +131,6 @@ impl<BE: Backend, M> TestContextModule<BE> for M where
         + CKKSPow2Ops<BE>
         + CKKSPlaintextVecOps<BE>
         + CKKSAddManyOps<BE>
-        + CKKSMulManyOps<BE>
         + CKKSMulAddOps<BE>
         + CKKSMulSubOps<BE>
         + CKKSAffineOps<BE>
@@ -409,9 +407,7 @@ where
     ct.set_meta(params.prec);
     let tsk_infos = params.tsk_layout();
     let atk_infos = params.atk_layout();
-    let scratch_size = module
-        .ckks_all_ops_with_atk_tmp_bytes(&ct, &tsk_infos, &atk_infos, &PT_PREC)
-        .max(module.ckks_mul_many_tmp_bytes(8, &ct, &tsk_infos));
+    let scratch_size = module.ckks_all_ops_with_atk_tmp_bytes(&ct, &tsk_infos, &atk_infos, &PT_PREC);
     ScratchOwned::<BE>::alloc(scratch_size)
 }
 

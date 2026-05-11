@@ -127,6 +127,7 @@ macro_rules! ckks_backend_test_suite {
                 ($name:ident, $path:path) => {
                     #[test]
                     fn $name() {
+                        #[allow(clippy::unsafe_removed_from_name)]
                         use $path as __test_fn;
                         __test_fn::<$backend, $scalar, $encoder_ty>($params, &*MODULE, &*HOST_MODULE);
                     }
@@ -137,6 +138,7 @@ macro_rules! ckks_backend_test_suite {
                 ($name:ident, $path:path, $arg:expr) => {
                     #[test]
                     fn $name() {
+                        #[allow(clippy::unsafe_removed_from_name)]
                         use $path as __test_fn;
                         __test_fn::<$backend, $scalar, $encoder_ty>($params, &*MODULE, &*HOST_MODULE, $arg);
                     }
@@ -147,6 +149,7 @@ macro_rules! ckks_backend_test_suite {
                 ($name:ident, $path:path) => {
                     #[test]
                     fn $name() -> Result<()> {
+                        #[allow(clippy::unsafe_removed_from_name)]
                         use $path as __test_fn;
                         __test_fn::<$backend, $scalar, $encoder_ty>($params, &*MODULE, &*HOST_MODULE)
                     }
@@ -464,24 +467,6 @@ macro_rules! ckks_backend_test_suite {
                 add_many_smaller_output,
                 $crate::test_suite::add_many::test_add_many_smaller_output
             );
-            run_test!(mul_many_aligned, $crate::test_suite::mul_many::test_mul_many_aligned);
-            run_test!(
-                mul_many_two_terms_exact_tmp,
-                $crate::test_suite::mul_many::test_mul_many_two_terms_exact_tmp
-            );
-            run_test!(
-                mul_many_single_smaller_output,
-                $crate::test_suite::mul_many::test_mul_many_single_smaller_output
-            );
-            run_test!(mul_many_odd_tree, $crate::test_suite::mul_many::test_mul_many_odd_tree);
-            run_test!(
-                mul_many_unaligned_log_budget,
-                $crate::test_suite::mul_many::test_mul_many_unaligned_log_budget
-            );
-            run_test!(
-                mul_many_smaller_output,
-                $crate::test_suite::mul_many::test_mul_many_smaller_output
-            );
             run_test!(mul_add_ct_aligned, $crate::test_suite::mul_add::test_mul_add_ct_aligned);
             run_test!(
                 mul_add_ct_unaligned_dst,
@@ -592,7 +577,6 @@ pub mod helpers;
 pub mod imag;
 pub mod mul;
 pub mod mul_add;
-pub mod mul_many;
 pub mod mul_pow2;
 pub mod mul_sub;
 pub mod neg;
