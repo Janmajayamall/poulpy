@@ -1,10 +1,9 @@
 //! Backend-generic CKKS test suite.
 //!
-//! All test functions are generic over `BE: Backend` and take a
-//! [`TestContext`](helpers::TestContext) that owns the module, secret key,
-//! and optional evaluation keys.  The backend-specific test harnesses
-//! (in downstream crates such as `poulpy-cpu-ref`) instantiate and invoke
-//! these functions via the [`ckks_backend_test_suite!`] macro.
+//! All test functions are generic over `BE: super::helpers::TestContextBackend` and take
+//! `(params: CKKSTestParams, module: &Module<BE>, host_module: &Module<HostBytesBackend>)`.
+//! The backend-specific test harnesses (in downstream crates such as `poulpy-cpu-ref`)
+//! instantiate and invoke these functions via the [`ckks_backend_test_suite!`] macro.
 
 use poulpy_core::{
     EncryptionLayout,
@@ -118,16 +117,18 @@ macro_rules! ckks_backend_test_suite {
 
             use anyhow::Result;
 
-            use $crate::test_suite::helpers::TestContext;
+            use poulpy_hal::layouts::{HostBytesBackend, Module};
 
-            static CTX: LazyLock<TestContext<$backend, $scalar, $encoder_ty>> =
-                LazyLock::new(|| TestContext::new($params, $rotations));
+            static MODULE: LazyLock<Module<$backend>> = LazyLock::new(|| Module::<$backend>::new($params.n as u64));
+            static HOST_MODULE: LazyLock<Module<HostBytesBackend>> =
+                LazyLock::new(|| Module::<HostBytesBackend>::new($params.n as u64));
 
             macro_rules! run_test {
                 ($name:ident, $path:path) => {
                     #[test]
                     fn $name() {
-                        $path(&CTX);
+                        use $path as __test_fn;
+                        __test_fn::<$backend, $scalar, $encoder_ty>($params, &*MODULE, &*HOST_MODULE);
                     }
                 };
             }
@@ -136,7 +137,8 @@ macro_rules! ckks_backend_test_suite {
                 ($name:ident, $path:path, $arg:expr) => {
                     #[test]
                     fn $name() {
-                        $path(&CTX, $arg);
+                        use $path as __test_fn;
+                        __test_fn::<$backend, $scalar, $encoder_ty>($params, &*MODULE, &*HOST_MODULE, $arg);
                     }
                 };
             }
@@ -145,7 +147,8 @@ macro_rules! ckks_backend_test_suite {
                 ($name:ident, $path:path) => {
                     #[test]
                     fn $name() -> Result<()> {
-                        $path(&CTX)
+                        use $path as __test_fn;
+                        __test_fn::<$backend, $scalar, $encoder_ty>($params, &*MODULE, &*HOST_MODULE)
                     }
                 };
             }

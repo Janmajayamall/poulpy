@@ -12,14 +12,18 @@
 //! | [`test_mul_many_smaller_output`] | output narrower than would be needed |
 
 use poulpy_hal::{
-    api::{ScratchOwnedAlloc, ScratchOwnedBorrow},
-    layouts::ScratchOwned,
+    api::{NegacyclicFFT, NegacyclicFFTNew, ScratchOwnedAlloc, ScratchOwnedBorrow},
+    layouts::{HostBytesBackend, Module, ScratchOwned},
 };
 
 use crate::leveled::api::CKKSMulManyOps;
 
-use super::helpers::{TestContext, TestMulBackend as Backend, TestScalar};
-use poulpy_hal::api::NegacyclicFFT;
+use super::helpers::{
+    TestContextBackend, TestContextModule, TestScalar, alloc_ct, alloc_scratch, assert_decrypt_precision, ckks_encrypt,
+    gen_sk_with_raw, gen_tsk, test_vector_1, test_vector_2,
+};
+
+use crate::{encoding::reim::Encoder, test_suite::CKKSTestParams};
 
 type Factors<F> = (Vec<(Vec<F>, Vec<F>)>, Vec<F>, Vec<F>);
 
@@ -40,11 +44,10 @@ fn cmul_assign<F: TestScalar>(acc_re: &mut [F], acc_im: &mut [F], re: &[F], im: 
     }
 }
 
-/// Builds `n` small-magnitude inputs and the expected elementwise product.
-fn build_factors<F: TestScalar>(ctx: &TestContext<impl Backend, F, impl NegacyclicFFT<F>>, n: usize) -> Factors<F> {
+fn build_factors<F: TestScalar>(re1: &[F], im1: &[F], re2: &[F], im2: &[F], n: usize) -> Factors<F> {
     let scale = F::from_f64(0.5).unwrap();
-    let (re_a, im_a) = scaled_pair(&ctx.re1, &ctx.im1, scale);
-    let (re_b, im_b) = scaled_pair(&ctx.re2, &ctx.im2, scale);
+    let (re_a, im_a) = scaled_pair(re1, im1, scale);
+    let (re_b, im_b) = scaled_pair(re2, im2, scale);
     let mut factors: Vec<(Vec<F>, Vec<F>)> = Vec::with_capacity(n);
     for k in 0..n {
         factors.push(if k % 2 == 0 {
@@ -53,7 +56,7 @@ fn build_factors<F: TestScalar>(ctx: &TestContext<impl Backend, F, impl Negacycl
             (re_b.clone(), im_b.clone())
         });
     }
-    let m: usize = ctx.re1.len();
+    let m: usize = re1.len();
     let mut want_re: Vec<F> = vec![F::from_f64(1.0).unwrap(); m];
     let mut want_im: Vec<F> = vec![F::zero(); m];
     for (re, im) in factors.iter() {
@@ -62,109 +65,305 @@ fn build_factors<F: TestScalar>(ctx: &TestContext<impl Backend, F, impl Negacycl
     (factors, want_re, want_im)
 }
 
-fn alloc_scratch<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>, n: usize) -> ScratchOwned<BE> {
-    let ct_infos = ctx.ct_infos();
-    let tsk_infos = ctx.params.tsk_layout();
-    let bytes = ctx.module.ckks_mul_many_tmp_bytes(n, &ct_infos, &tsk_infos);
-    ScratchOwned::<BE>::alloc(ctx.scratch_size.max(bytes))
-}
+pub fn test_mul_many_aligned<BE, F, E>(params: CKKSTestParams, module: &Module<BE>, host_module: &Module<HostBytesBackend>)
+where
+    BE: TestContextBackend,
+    Module<BE>: TestContextModule<BE>,
+    F: TestScalar,
+    E: NegacyclicFFT<F> + NegacyclicFFTNew<F>,
+{
+    let m = params.n / 2;
+    let encoder = Encoder::<E>::new(m).unwrap();
+    let (re1, im1) = test_vector_1::<F>(m);
+    let (re2, im2) = test_vector_2::<F>(m);
+    let (sk_raw, sk) = gen_sk_with_raw(&params, module, host_module, [0u8; 32]);
+    let mut scratch = alloc_scratch(&params, module);
+    let tsk = gen_tsk(&params, module, &sk_raw, &mut scratch.borrow());
 
-fn run<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>, n: usize, output_k: usize, label: &str) {
-    let mut scratch = alloc_scratch(ctx, n);
-    let (factors, want_re, want_im) = build_factors(ctx, n);
+    let (factors, want_re, want_im) = build_factors(&re1, &im1, &re2, &im2, 4);
     let cts: Vec<_> = factors
         .iter()
-        .map(|(re, im)| ctx.encrypt(ctx.max_k(), re, im, &mut scratch.borrow()))
+        .map(|(re, im)| {
+            ckks_encrypt(
+                &params,
+                module,
+                host_module,
+                &encoder,
+                &sk,
+                params.k,
+                re,
+                im,
+                &mut scratch.borrow(),
+            )
+        })
         .collect();
     let ct_refs: Vec<&_> = cts.iter().collect();
-    let mut ct_res = ctx.alloc_ct(output_k);
-    ctx.module
-        .ckks_mul_many(&mut ct_res, &ct_refs, ctx.tsk(), &mut scratch.borrow())
+    let mut ct_res = alloc_ct(&params, module, params.k);
+    module
+        .ckks_mul_many(&mut ct_res, &ct_refs, &tsk, &mut scratch.borrow())
         .unwrap();
-    ctx.assert_decrypt_precision(label, &ct_res, &want_re, &want_im, &mut scratch.borrow());
-}
-
-pub fn test_mul_many_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
-    run(ctx, 4, ctx.max_k(), "mul_many_aligned");
-}
-
-pub fn test_mul_many_two_terms_exact_tmp<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
-    let n: usize = 2;
-    let mut setup_scratch = ScratchOwned::<BE>::alloc(ctx.scratch_size);
-    let (factors, want_re, want_im) = build_factors(ctx, n);
-    let cts: Vec<_> = factors
-        .iter()
-        .map(|(re, im)| ctx.encrypt(ctx.max_k(), re, im, &mut setup_scratch.borrow()))
-        .collect();
-    let ct_refs: Vec<&_> = cts.iter().collect();
-    let mut ct_res = ctx.alloc_ct(ctx.max_k());
-
-    let ct_infos = ctx.ct_infos();
-    let tsk_infos = ctx.params.tsk_layout();
-    let bytes = ctx.module.ckks_mul_many_tmp_bytes(n, &ct_infos, &tsk_infos);
-    let mut op_scratch = ScratchOwned::<BE>::alloc(bytes);
-    ctx.module
-        .ckks_mul_many(&mut ct_res, &ct_refs, ctx.tsk(), &mut op_scratch.borrow())
-        .unwrap();
-
-    ctx.assert_decrypt_precision(
-        "mul_many_two_terms_exact_tmp",
+    assert_decrypt_precision(
+        "mul_many_aligned",
+        &params,
+        module,
+        &encoder,
         &ct_res,
+        &sk,
+        &want_re,
+        &want_im,
+        &mut scratch.borrow(),
+    );
+}
+
+pub fn test_mul_many_two_terms_exact_tmp<BE, F, E>(
+    params: CKKSTestParams,
+    module: &Module<BE>,
+    host_module: &Module<HostBytesBackend>,
+) where
+    BE: TestContextBackend,
+    Module<BE>: TestContextModule<BE>,
+    F: TestScalar,
+    E: NegacyclicFFT<F> + NegacyclicFFTNew<F>,
+{
+    let n: usize = 2;
+    let m = params.n / 2;
+    let encoder = Encoder::<E>::new(m).unwrap();
+    let (re1, im1) = test_vector_1::<F>(m);
+    let (re2, im2) = test_vector_2::<F>(m);
+    let (sk_raw, sk) = gen_sk_with_raw(&params, module, host_module, [0u8; 32]);
+    let mut setup_scratch = alloc_scratch(&params, module);
+    let tsk = gen_tsk(&params, module, &sk_raw, &mut setup_scratch.borrow());
+
+    let (factors, want_re, want_im) = build_factors(&re1, &im1, &re2, &im2, n);
+    let cts: Vec<_> = factors
+        .iter()
+        .map(|(re, im)| {
+            ckks_encrypt(
+                &params,
+                module,
+                host_module,
+                &encoder,
+                &sk,
+                params.k,
+                re,
+                im,
+                &mut setup_scratch.borrow(),
+            )
+        })
+        .collect();
+    let ct_refs: Vec<&_> = cts.iter().collect();
+    let mut ct_res = alloc_ct(&params, module, params.k);
+
+    let tsk_infos = params.tsk_layout();
+    let bytes = module.ckks_mul_many_tmp_bytes(n, &ct_res, &tsk_infos);
+    let mut op_scratch = ScratchOwned::<BE>::alloc(bytes);
+    module
+        .ckks_mul_many(&mut ct_res, &ct_refs, &tsk, &mut op_scratch.borrow())
+        .unwrap();
+
+    assert_decrypt_precision(
+        "mul_many_two_terms_exact_tmp",
+        &params,
+        module,
+        &encoder,
+        &ct_res,
+        &sk,
         &want_re,
         &want_im,
         &mut setup_scratch.borrow(),
     );
 }
 
-pub fn test_mul_many_single_smaller_output<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
-    let mut scratch = alloc_scratch(ctx, 1);
-    let ct = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
+pub fn test_mul_many_single_smaller_output<BE, F, E>(
+    params: CKKSTestParams,
+    module: &Module<BE>,
+    host_module: &Module<HostBytesBackend>,
+) where
+    BE: TestContextBackend,
+    Module<BE>: TestContextModule<BE>,
+    F: TestScalar,
+    E: NegacyclicFFT<F> + NegacyclicFFTNew<F>,
+{
+    let m = params.n / 2;
+    let encoder = Encoder::<E>::new(m).unwrap();
+    let (re1, im1) = test_vector_1::<F>(m);
+    let (sk_raw, sk) = gen_sk_with_raw(&params, module, host_module, [0u8; 32]);
+    let mut scratch = alloc_scratch(&params, module);
+    let tsk = gen_tsk(&params, module, &sk_raw, &mut scratch.borrow());
+
+    let ct = ckks_encrypt(
+        &params,
+        module,
+        host_module,
+        &encoder,
+        &sk,
+        params.k,
+        &re1,
+        &im1,
+        &mut scratch.borrow(),
+    );
     let ct_refs = vec![&ct];
-    let mut ct_res = ctx.alloc_ct(ctx.max_k() - ctx.base2k().as_usize() - 1);
-    ctx.module
-        .ckks_mul_many(&mut ct_res, &ct_refs, ctx.tsk(), &mut scratch.borrow())
+    let mut ct_res = alloc_ct(&params, module, params.k - params.base2k - 1);
+    module
+        .ckks_mul_many(&mut ct_res, &ct_refs, &tsk, &mut scratch.borrow())
         .unwrap();
-    ctx.assert_decrypt_precision(
+    assert_decrypt_precision(
         "mul_many_single_smaller_output",
+        &params,
+        module,
+        &encoder,
         &ct_res,
-        &ctx.re1,
-        &ctx.im1,
+        &sk,
+        &re1,
+        &im1,
         &mut scratch.borrow(),
     );
 }
 
-pub fn test_mul_many_odd_tree<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
-    run(ctx, 5, ctx.max_k(), "mul_many_odd_tree");
-}
+pub fn test_mul_many_odd_tree<BE, F, E>(params: CKKSTestParams, module: &Module<BE>, host_module: &Module<HostBytesBackend>)
+where
+    BE: TestContextBackend,
+    Module<BE>: TestContextModule<BE>,
+    F: TestScalar,
+    E: NegacyclicFFT<F> + NegacyclicFFTNew<F>,
+{
+    let m = params.n / 2;
+    let encoder = Encoder::<E>::new(m).unwrap();
+    let (re1, im1) = test_vector_1::<F>(m);
+    let (re2, im2) = test_vector_2::<F>(m);
+    let (sk_raw, sk) = gen_sk_with_raw(&params, module, host_module, [0u8; 32]);
+    let mut scratch = alloc_scratch(&params, module);
+    let tsk = gen_tsk(&params, module, &sk_raw, &mut scratch.borrow());
 
-pub fn test_mul_many_unaligned_log_budget<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
-    let n: usize = 4;
-    let mut scratch = alloc_scratch(ctx, n);
-    let (factors, want_re, want_im) = build_factors(ctx, n);
-    let smaller_k = ctx.max_k() - ctx.base2k().as_usize() + 1;
+    let (factors, want_re, want_im) = build_factors(&re1, &im1, &re2, &im2, 5);
     let cts: Vec<_> = factors
         .iter()
-        .enumerate()
-        .map(|(i, (re, im))| {
-            let k = if i == 2 { smaller_k } else { ctx.max_k() };
-            ctx.encrypt(k, re, im, &mut scratch.borrow())
+        .map(|(re, im)| {
+            ckks_encrypt(
+                &params,
+                module,
+                host_module,
+                &encoder,
+                &sk,
+                params.k,
+                re,
+                im,
+                &mut scratch.borrow(),
+            )
         })
         .collect();
     let ct_refs: Vec<&_> = cts.iter().collect();
-    let mut ct_res = ctx.alloc_ct(ctx.max_k());
-    ctx.module
-        .ckks_mul_many(&mut ct_res, &ct_refs, ctx.tsk(), &mut scratch.borrow())
+    let mut ct_res = alloc_ct(&params, module, params.k);
+    module
+        .ckks_mul_many(&mut ct_res, &ct_refs, &tsk, &mut scratch.borrow())
         .unwrap();
-    ctx.assert_decrypt_precision(
-        "mul_many unaligned_log_budget",
+    assert_decrypt_precision(
+        "mul_many_odd_tree",
+        &params,
+        module,
+        &encoder,
         &ct_res,
+        &sk,
         &want_re,
         &want_im,
         &mut scratch.borrow(),
     );
 }
 
-pub fn test_mul_many_smaller_output<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_mul_many_unaligned_log_budget<BE, F, E>(
+    params: CKKSTestParams,
+    module: &Module<BE>,
+    host_module: &Module<HostBytesBackend>,
+) where
+    BE: TestContextBackend,
+    Module<BE>: TestContextModule<BE>,
+    F: TestScalar,
+    E: NegacyclicFFT<F> + NegacyclicFFTNew<F>,
+{
     let n: usize = 4;
-    run(ctx, n, ctx.max_k() - ctx.base2k().as_usize() - 1, "mul_many smaller_output");
+    let m = params.n / 2;
+    let encoder = Encoder::<E>::new(m).unwrap();
+    let (re1, im1) = test_vector_1::<F>(m);
+    let (re2, im2) = test_vector_2::<F>(m);
+    let (sk_raw, sk) = gen_sk_with_raw(&params, module, host_module, [0u8; 32]);
+    let mut scratch = alloc_scratch(&params, module);
+    let tsk = gen_tsk(&params, module, &sk_raw, &mut scratch.borrow());
+
+    let (factors, want_re, want_im) = build_factors(&re1, &im1, &re2, &im2, n);
+    let smaller_k = params.k - params.base2k + 1;
+    let cts: Vec<_> = factors
+        .iter()
+        .enumerate()
+        .map(|(i, (re, im))| {
+            let k = if i == 2 { smaller_k } else { params.k };
+            ckks_encrypt(&params, module, host_module, &encoder, &sk, k, re, im, &mut scratch.borrow())
+        })
+        .collect();
+    let ct_refs: Vec<&_> = cts.iter().collect();
+    let mut ct_res = alloc_ct(&params, module, params.k);
+    module
+        .ckks_mul_many(&mut ct_res, &ct_refs, &tsk, &mut scratch.borrow())
+        .unwrap();
+    assert_decrypt_precision(
+        "mul_many unaligned_log_budget",
+        &params,
+        module,
+        &encoder,
+        &ct_res,
+        &sk,
+        &want_re,
+        &want_im,
+        &mut scratch.borrow(),
+    );
+}
+
+pub fn test_mul_many_smaller_output<BE, F, E>(params: CKKSTestParams, module: &Module<BE>, host_module: &Module<HostBytesBackend>)
+where
+    BE: TestContextBackend,
+    Module<BE>: TestContextModule<BE>,
+    F: TestScalar,
+    E: NegacyclicFFT<F> + NegacyclicFFTNew<F>,
+{
+    let n: usize = 4;
+    let m = params.n / 2;
+    let encoder = Encoder::<E>::new(m).unwrap();
+    let (re1, im1) = test_vector_1::<F>(m);
+    let (re2, im2) = test_vector_2::<F>(m);
+    let (sk_raw, sk) = gen_sk_with_raw(&params, module, host_module, [0u8; 32]);
+    let mut scratch = alloc_scratch(&params, module);
+    let tsk = gen_tsk(&params, module, &sk_raw, &mut scratch.borrow());
+
+    let (factors, want_re, want_im) = build_factors(&re1, &im1, &re2, &im2, n);
+    let cts: Vec<_> = factors
+        .iter()
+        .map(|(re, im)| {
+            ckks_encrypt(
+                &params,
+                module,
+                host_module,
+                &encoder,
+                &sk,
+                params.k,
+                re,
+                im,
+                &mut scratch.borrow(),
+            )
+        })
+        .collect();
+    let ct_refs: Vec<&_> = cts.iter().collect();
+    let mut ct_res = alloc_ct(&params, module, params.k - params.base2k - 1);
+    module
+        .ckks_mul_many(&mut ct_res, &ct_refs, &tsk, &mut scratch.borrow())
+        .unwrap();
+    assert_decrypt_precision(
+        "mul_many smaller_output",
+        &params,
+        module,
+        &encoder,
+        &ct_res,
+        &sk,
+        &want_re,
+        &want_im,
+        &mut scratch.borrow(),
+    );
 }
