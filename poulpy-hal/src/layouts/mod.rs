@@ -301,7 +301,6 @@ impl<T: Backend<Location = Host, OwnedBuf = Vec<u8>>> TransferFrom<HostBytesBack
     }
 }
 
-
 /// Implement a backend marker by forwarding all storage- and handle-level
 /// behavior to an existing backend.
 ///

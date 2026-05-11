@@ -284,4 +284,3 @@ fn module_transfer_gglwe_roundtrip() {
     assert_eq!(uploaded, via_wrapper);
     assert_eq!(downloaded, src);
 }
-

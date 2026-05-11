@@ -157,11 +157,13 @@ macro_rules! cross_backend_test_suite {
         }
     ) => {
         mod $modname {
-            use poulpy_hal::{api::ModuleNew, layouts::Module, test_suite::TestParams};
+            use poulpy_hal::{api::ModuleNew, layouts::{HostBytesBackend, Module}, test_suite::TestParams};
 
             use once_cell::sync::Lazy;
 
             static PARAMS: Lazy<TestParams> = Lazy::new(|| $params);
+            static MODULE_HOST: Lazy<Module<HostBytesBackend>> =
+                Lazy::new(|| Module::<HostBytesBackend>::new(PARAMS.size as u64));
             static MODULE_REF: Lazy<Module<$backend_ref>> =
                 Lazy::new(|| Module::<$backend_ref>::new(PARAMS.size as u64));
             static MODULE_TEST: Lazy<Module<$backend_test>> =
@@ -171,7 +173,7 @@ macro_rules! cross_backend_test_suite {
                 $(#[$attr])*
                 #[test]
                 fn $test_name() {
-                    ($impl)(&*PARAMS, &*MODULE_REF, &*MODULE_TEST);
+                    ($impl)(&*PARAMS, &*MODULE_HOST, &*MODULE_REF, &*MODULE_TEST);
                 }
             )+
         }

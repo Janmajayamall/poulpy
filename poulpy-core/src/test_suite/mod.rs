@@ -72,8 +72,6 @@ where
 {
 }
 
-type HostModule = Module<HB>;
-
 impl<BE> TestBackend for BE
 where
     BE: HalTestBackend

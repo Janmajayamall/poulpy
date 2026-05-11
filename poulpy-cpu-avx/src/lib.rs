@@ -189,8 +189,8 @@ pub use ntt120::NTT120Avx;
 // --- TransferFrom impls ---
 #[cfg(feature = "enable-avx")]
 mod transfer_impls {
-    use poulpy_hal::layouts::{Backend, TransferFrom};
     use poulpy_cpu_ref::{FFT64Ref, NTT120Ref};
+    use poulpy_hal::layouts::{Backend, TransferFrom};
 
     use crate::{FFT64Avx, NTT120Avx};
 

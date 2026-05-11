@@ -42,7 +42,6 @@ where
     ScalarZnx::from_data(<To as TransferFrom<From>>::transfer_buf(src.data()), src.n(), src.cols())
 }
 
-
 pub trait ModuleTransfer<To: Backend> {
     fn upload_glwe<From>(&self, src: &BackendGLWE<From>) -> BackendGLWE<To>
     where
@@ -123,7 +122,6 @@ pub trait ModuleTransfer<To: Backend> {
     where
         From: Backend,
         To: TransferFrom<From>;
-
 }
 
 impl<To: Backend> ModuleTransfer<To> for Module<To> {
