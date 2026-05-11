@@ -21,8 +21,8 @@ pub use plaintext::CKKSPlaintext;
 use std::fmt::Debug;
 
 use rand_distr::num_traits::{Float, FromPrimitive, ToPrimitive};
-pub trait CKKSRnxScalar: Float + FromPrimitive + ToPrimitive + Debug {}
+pub trait CKKSScalar: Float + FromPrimitive + ToPrimitive + Debug {}
 
-impl<T> CKKSRnxScalar for T where T: Float + FromPrimitive + ToPrimitive + Debug {}
+impl<T> CKKSScalar for T where T: Float + FromPrimitive + ToPrimitive + Debug {}
 
 pub use plaintext::CKKSPlaintextVecHostCodec;

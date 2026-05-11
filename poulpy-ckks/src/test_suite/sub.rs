@@ -19,13 +19,13 @@
 //! | [`test_sub_ct_assign_self_lt`] | `self.log_budget() < a.log_budget()` → a shifted to align with self |
 //! | [`test_sub_ct_assign_self_gt`] | `self.log_budget() > a.log_budget()` → self shifted to align with a |
 //!
-//! ## Operations-layer ct - ZNX plaintext (`GLWE<_, CKKS>::sub_pt_vec_znx_into[_assign]`)
+//! ## Operations-layer ct - ZNX plaintext (`GLWE<_, CKKS>::sub_pt_vec_into[_assign]`)
 //!
 //! | Function | Path exercised |
 //! |----------|----------------|
-//! | [`test_sub_pt_vec_znx_assign`] | in-place, `offset == 0` |
-//! | [`test_sub_pt_vec_znx`] | out-of-place, `offset == 0` |
-//! | [`test_sub_pt_vec_znx_into_smaller_output`] | out-of-place, `offset > 0` (output one limb narrower) |
+//! | [`test_sub_pt_vec_assign`] | in-place, `offset == 0` |
+//! | [`test_sub_pt_vec`] | out-of-place, `offset == 0` |
+//! | [`test_sub_pt_vec_into_smaller_output`] | out-of-place, `offset > 0` (output one limb narrower) |
 use crate::{CKKSInfos, leveled::api::CKKSSubOps};
 
 use super::helpers::{
@@ -189,55 +189,55 @@ pub fn test_sub_ct_assign_self_gt<BE: Backend, F: TestScalar, E: NegacyclicFFT<F
     ctx.assert_decrypt_precision("sub_ct_assign self_gt", &ct_self, &want_re, &want_im, &mut scratch.borrow());
 }
 
-// ─── ct - compact ZNX plaintext (GLWE<_, CKKS>::sub_pt_vec_znx_into[_assign]) ────────
+// ─── ct - compact ZNX plaintext (GLWE<_, CKKS>::sub_pt_vec_into[_assign]) ────────
 
 /// ct - ZNX plaintext, in-place.
-pub fn test_sub_pt_vec_znx_assign<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_sub_pt_vec_assign<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = ctx.alloc_scratch();
     let mut ct = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
     let (pt_re, pt_im) = ctx.pt_vector(TestVector::Second);
-    let pt_znx = ctx.encode_pt_znx(&ctx.re2, &ctx.im2);
+    let pt = ctx.encode_pt(&ctx.re2, &ctx.im2);
     let (want_re, want_im) = ctx.want_sub_from(&ctx.re1, &ctx.im1, &pt_re, &pt_im);
     let expected_log_delta = ct.log_delta();
     let expected_log_budget = ct.log_budget();
     ctx.module
-        .ckks_sub_pt_vec_znx_assign(&mut ct, &pt_znx, &mut scratch.borrow())
+        .ckks_sub_pt_vec_assign(&mut ct, &pt, &mut scratch.borrow())
         .unwrap();
-    assert_ct_meta("sub_pt_vec_znx_assign", &ct, expected_log_delta, expected_log_budget);
-    ctx.assert_decrypt_precision("sub_pt_vec_znx_assign", &ct, &want_re, &want_im, &mut scratch.borrow());
+    assert_ct_meta("sub_pt_vec_assign", &ct, expected_log_delta, expected_log_budget);
+    ctx.assert_decrypt_precision("sub_pt_vec_assign", &ct, &want_re, &want_im, &mut scratch.borrow());
 }
 
 /// ct - ZNX plaintext, out-of-place.
-pub fn test_sub_pt_vec_znx<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_sub_pt_vec<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = ctx.alloc_scratch();
     let ct1 = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
     let (pt_re, pt_im) = ctx.pt_vector(TestVector::Second);
-    let pt_znx = ctx.encode_pt_znx(&ctx.re2, &ctx.im2);
+    let pt = ctx.encode_pt(&ctx.re2, &ctx.im2);
     let (want_re, want_im) = ctx.want_sub_from(&ctx.re1, &ctx.im1, &pt_re, &pt_im);
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     ctx.module
-        .ckks_sub_pt_vec_znx_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
+        .ckks_sub_pt_vec_into(&mut ct_res, &ct1, &pt, &mut scratch.borrow())
         .unwrap();
-    assert_unary_output_meta("sub_pt_vec_znx_into", &ct_res, &ct1);
-    ctx.assert_decrypt_precision("sub_pt_vec_znx_into", &ct_res, &want_re, &want_im, &mut scratch.borrow());
+    assert_unary_output_meta("sub_pt_vec_into", &ct_res, &ct1);
+    ctx.assert_decrypt_precision("sub_pt_vec_into", &ct_res, &want_re, &want_im, &mut scratch.borrow());
 }
 
 /// ct - ZNX plaintext, out-of-place, plaintext encoded at lower decimal precision.
-pub fn test_sub_pt_vec_znx_into_delta_log_delta<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_sub_pt_vec_into_delta_log_delta<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = ctx.alloc_scratch();
     let pt_prec = ctx.meta_pt();
     let (a_re, a_im) = ctx.quantized_vector(TestVector::First, ctx.meta().log_delta);
     let (b_re, b_im) = ctx.pt_vector(TestVector::Second);
     let ct1 = ctx.encrypt(ctx.max_k(), &a_re, &a_im, &mut scratch.borrow());
-    let pt_znx = ctx.encode_pt_znx_with_prec(&ctx.re2, &ctx.im2, pt_prec);
+    let pt = ctx.encode_pt_with_prec(&ctx.re2, &ctx.im2, pt_prec);
     let (want_re, want_im) = ctx.want_sub_from(&a_re, &a_im, &b_re, &b_im);
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     ctx.module
-        .ckks_sub_pt_vec_znx_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
+        .ckks_sub_pt_vec_into(&mut ct_res, &ct1, &pt, &mut scratch.borrow())
         .unwrap();
-    assert_unary_output_meta("sub_pt_vec_znx_into delta_log_delta", &ct_res, &ct1);
+    assert_unary_output_meta("sub_pt_vec_into delta_log_delta", &ct_res, &ct1);
     ctx.assert_decrypt_precision_at_log_delta(
-        "sub_pt_vec_znx_into delta_log_delta",
+        "sub_pt_vec_into delta_log_delta",
         &ct_res,
         &want_re,
         &want_im,
@@ -248,21 +248,21 @@ pub fn test_sub_pt_vec_znx_into_delta_log_delta<BE: Backend, F: TestScalar, E: N
 
 /// ct - ZNX plaintext, out-of-place, output buffer has smaller max_k than `a` (offset > 0).
 ///
-/// Exercises the lsh-then-sub path in `sub_pt_vec_znx_into`.  The output log_budget must
+/// Exercises the lsh-then-sub path in `sub_pt_vec_into`.  The output log_budget must
 /// equal `a.log_budget() − base2k`, not the original `a.log_budget()`.
-pub fn test_sub_pt_vec_znx_into_smaller_output<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_sub_pt_vec_into_smaller_output<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = ctx.alloc_scratch();
     let ct1 = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
     let (pt_re, pt_im) = ctx.pt_vector(TestVector::Second);
-    let pt_znx = ctx.encode_pt_znx(&ctx.re2, &ctx.im2);
+    let pt = ctx.encode_pt(&ctx.re2, &ctx.im2);
     let (want_re, want_im) = ctx.want_sub_from(&ctx.re1, &ctx.im1, &pt_re, &pt_im);
     let mut ct_res = ctx.alloc_ct(ctx.max_k() - ctx.base2k().as_usize() - 1);
     ctx.module
-        .ckks_sub_pt_vec_znx_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
+        .ckks_sub_pt_vec_into(&mut ct_res, &ct1, &pt, &mut scratch.borrow())
         .unwrap();
-    assert_unary_output_meta("sub_pt_vec_znx_into smaller_output", &ct_res, &ct1);
+    assert_unary_output_meta("sub_pt_vec_into smaller_output", &ct_res, &ct1);
     ctx.assert_decrypt_precision(
-        "sub_pt_vec_znx_into smaller_output",
+        "sub_pt_vec_into smaller_output",
         &ct_res,
         &want_re,
         &want_im,
@@ -270,23 +270,23 @@ pub fn test_sub_pt_vec_znx_into_smaller_output<BE: Backend, F: TestScalar, E: Ne
     );
 }
 
-pub fn test_sub_pt_const_znx_into_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_sub_pt_const_into_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = ctx.alloc_scratch();
     let ct = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
-    let (const_re, const_im) = ctx.add_sub_const_pt();
+    let (const_re, const_im) = ctx.add_sub_const();
     let want_re: Vec<F> = ctx.re1.iter().map(|x| *x - const_re).collect();
     let want_im: Vec<F> = ctx.im1.iter().map(|x| *x - const_im).collect();
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
-    let cst_znx = ctx.add_sub_const_rnx_pt();
+    let cst = ctx.add_sub_const_pt();
     ctx.module
-        .ckks_sub_pt_const_znx_into(&mut ct_res, &ct, 0, &cst_znx, 0, &mut scratch.borrow())
+        .ckks_sub_pt_const_into(&mut ct_res, &ct, 0, &cst, 0, &mut scratch.borrow())
         .unwrap();
     ctx.module
-        .ckks_sub_pt_const_znx_assign(&mut ct_res, ctx.m(), &cst_znx, 1, &mut scratch.borrow())
+        .ckks_sub_pt_const_assign(&mut ct_res, ctx.m(), &cst, 1, &mut scratch.borrow())
         .unwrap();
-    assert_unary_output_meta("sub_pt_const_znx_into_aligned", &ct_res, &ct);
+    assert_unary_output_meta("sub_pt_const_into_aligned", &ct_res, &ct);
     ctx.assert_decrypt_precision(
-        "sub_pt_const_znx_into_aligned",
+        "sub_pt_const_into_aligned",
         &ct_res,
         &want_re,
         &want_im,

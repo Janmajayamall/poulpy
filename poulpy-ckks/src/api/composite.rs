@@ -98,7 +98,7 @@ pub trait CKKSMulAddOps<BE: Backend> {
         R: CKKSCtBounds,
         T: GGLWEInfos;
 
-    fn ckks_mul_add_pt_vec_znx_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
+    fn ckks_mul_add_pt_vec_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
     where
         R: CKKSCtBounds,
         A: CKKSCtBounds,
@@ -142,25 +142,25 @@ pub trait CKKSMulAddOps<BE: Backend> {
         CKKSCiphertext<B>: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos,
         GLWETensorKeyPrepared<T, BE>: GLWETensorKeyPreparedToBackendRef<BE>;
 
-    /// Computes `dst += a * pt_znx` where `pt_znx` is a full plaintext polynomial.
+    /// Computes `dst += a * pt` where `pt` is a full plaintext polynomial.
     ///
     /// # Metadata
     ///
     /// ```text
     /// // product metadata:
     /// prod_delta  = a.log_delta
-    /// prod_budget = a.log_budget − pt_znx.log_delta
+    /// prod_budget = a.log_budget − pt.log_delta
     ///
     /// // addition with dst:
     /// log_delta_out  = min(dst.log_delta, prod_delta)
     /// log_budget_out = min(dst.log_budget, prod_budget)
     ///                  − max(0, min(dst.effective_k(), prod_effective_k) − dst.max_k())
     /// ```
-    fn ckks_mul_add_pt_vec_znx_into<Dst: Data, A: Data, P>(
+    fn ckks_mul_add_pt_vec_into<Dst: Data, A: Data, P>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &CKKSCiphertext<A>,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -168,14 +168,14 @@ pub trait CKKSMulAddOps<BE: Backend> {
         CKKSCiphertext<A>: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst += a * pt_znx[pt_coeff]`.
+    /// Computes `dst += a * pt[pt_coeff]`.
     ///
-    /// Metadata follows the same rule as [`Self::ckks_mul_add_pt_vec_znx_into`].
-    fn ckks_mul_add_pt_const_znx_into<Dst: Data, A: Data, P>(
+    /// Metadata follows the same rule as [`Self::ckks_mul_add_pt_vec_into`].
+    fn ckks_mul_add_pt_const_into<Dst: Data, A: Data, P>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &CKKSCiphertext<A>,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -184,18 +184,18 @@ pub trait CKKSMulAddOps<BE: Backend> {
         CKKSCiphertext<A>: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst += a * pt_znx[pt_coeff]` without normalizing `dst`.
+    /// Computes `dst += a * pt[pt_coeff]` without normalizing `dst`.
     ///
     /// The accumulator `dst` carries un-propagated carries in its limb digits.
     /// Use this to fuse several multiply-add steps before a single
     /// [`UnnormalizedCKKSCiphertext::normalize`] call.  See
     /// [`crate::api::CKKSAddOpsUnnormalized`] for the digit-growth analysis
     /// and safety bound.
-    fn ckks_mul_add_pt_const_znx_into_unnormalized<Dst: Data, A, P>(
+    fn ckks_mul_add_pt_const_into_unnormalized<Dst: Data, A, P>(
         &self,
         dst: &mut UnnormalizedCKKSCiphertext<Dst>,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -204,15 +204,15 @@ pub trait CKKSMulAddOps<BE: Backend> {
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst += a * pt_znx` without normalizing `dst`.
+    /// Computes `dst += a * pt` without normalizing `dst`.
     ///
     /// Metadata follows the same rule as
-    /// [`Self::ckks_mul_add_pt_const_znx_into_unnormalized`].
-    fn ckks_mul_add_pt_vec_znx_into_unnormalized<Dst: Data, A, P>(
+    /// [`Self::ckks_mul_add_pt_const_into_unnormalized`].
+    fn ckks_mul_add_pt_vec_into_unnormalized<Dst: Data, A, P>(
         &self,
         dst: &mut UnnormalizedCKKSCiphertext<Dst>,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -359,7 +359,7 @@ pub trait CKKSMulSubOps<BE: Backend> {
         R: CKKSCtBounds,
         T: GGLWEInfos;
 
-    fn ckks_mul_sub_pt_vec_znx_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
+    fn ckks_mul_sub_pt_vec_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
     where
         R: CKKSCtBounds,
         A: CKKSCtBounds,
@@ -389,15 +389,15 @@ pub trait CKKSMulSubOps<BE: Backend> {
         CKKSCiphertext<B>: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos,
         GLWETensorKeyPrepared<T, BE>: GLWETensorKeyPreparedToBackendRef<BE>;
 
-    /// Computes `dst -= a * pt_znx` where `pt_znx` is a full plaintext polynomial.
+    /// Computes `dst -= a * pt` where `pt` is a full plaintext polynomial.
     ///
     /// Metadata follows the same rule as
-    /// [`CKKSMulAddOps::ckks_mul_add_pt_vec_znx_into`].
-    fn ckks_mul_sub_pt_vec_znx_into<Dst: Data, A: Data, P>(
+    /// [`CKKSMulAddOps::ckks_mul_add_pt_vec_into`].
+    fn ckks_mul_sub_pt_vec_into<Dst: Data, A: Data, P>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &CKKSCiphertext<A>,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -405,15 +405,15 @@ pub trait CKKSMulSubOps<BE: Backend> {
         CKKSCiphertext<A>: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst -= a * pt_znx[pt_coeff]`.
+    /// Computes `dst -= a * pt[pt_coeff]`.
     ///
     /// Metadata follows the same rule as
-    /// [`CKKSMulAddOps::ckks_mul_add_pt_const_znx_into`].
-    fn ckks_mul_sub_pt_const_znx_into<Dst: Data, A: Data, P>(
+    /// [`CKKSMulAddOps::ckks_mul_add_pt_const_into`].
+    fn ckks_mul_sub_pt_const_into<Dst: Data, A: Data, P>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &CKKSCiphertext<A>,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -432,7 +432,7 @@ pub trait CKKSDotProductOps<BE: Backend> {
         R: CKKSCtBounds,
         T: GGLWEInfos;
 
-    fn ckks_dot_product_pt_vec_znx_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
+    fn ckks_dot_product_pt_vec_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
     where
         R: CKKSCtBounds,
         A: CKKSCtBounds,
@@ -483,7 +483,7 @@ pub trait CKKSDotProductOps<BE: Backend> {
     /// log_delta_out  = a[i].log_delta
     /// log_budget_out = a[i].log_budget − b[i].log_delta − offset
     /// ```
-    fn ckks_dot_product_pt_vec_znx<Dst: Data, D: Data, E>(
+    fn ckks_dot_product_pt_vec<Dst: Data, D: Data, E>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &[&CKKSCiphertext<D>],
@@ -498,8 +498,8 @@ pub trait CKKSDotProductOps<BE: Backend> {
     /// Computes `dst = Σ a[i] * b[i][pt_coeffs[i]]` over ciphertext–scalar-constant pairs.
     ///
     /// Each `b[i]` contributes a single ZNX coefficient `pt_coeffs[i]`.
-    /// Metadata follows the same rule as [`Self::ckks_dot_product_pt_vec_znx`].
-    fn ckks_dot_product_pt_const_znx<Dst: Data, D: Data, E>(
+    /// Metadata follows the same rule as [`Self::ckks_dot_product_pt_vec`].
+    fn ckks_dot_product_pt_const<Dst: Data, D: Data, E>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &[&CKKSCiphertext<D>],

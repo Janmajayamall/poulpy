@@ -55,7 +55,7 @@ fn assert_decrypt_extract_success<BE: Backend, F: TestScalar, E: NegacyclicFFT<F
     let pt = ctx.decrypt_with_prec(&ct, dst_prec, &mut scratch.borrow()).unwrap();
     assert_eq!(pt.meta, dst_prec, "{label}: decrypt changed destination metadata");
 
-    let (re_out, im_out) = ctx.decode_pt_znx(&pt);
+    let (re_out, im_out) = ctx.decode_pt(&pt);
     let (want_prec, assert_log_delta) = if dst_prec.log_delta > src_prec.log_delta {
         // A left-shift during extraction only repacks the same source
         // quantization at a larger scale; it does not manufacture additional
@@ -134,7 +134,7 @@ pub fn test_decrypt_extract_output_hom_rem_too_large<BE: Backend, F: TestScalar,
     let src_prec = extract_src_prec(ctx);
     let mut scratch = ctx.alloc_scratch();
     let ct = extract_fixture(ctx, &mut scratch.borrow());
-    let mut pt = ctx.host_module.ckks_pt_vec_znx_alloc(
+    let mut pt = ctx.host_module.ckks_pt_vec_alloc(
         ctx.base2k(),
         CKKSMeta {
             log_delta: src_prec.log_delta,
@@ -149,7 +149,7 @@ pub fn test_decrypt_extract_output_hom_rem_too_large<BE: Backend, F: TestScalar,
         "decrypt_extract_output_hom_rem_too_large",
         &err,
         CKKSCompositionError::PlaintextAlignmentImpossible {
-            op: "ckks_extract_pt_znx",
+            op: "ckks_extract_pt",
             ct_log_budget: src_prec.log_budget,
             pt_log_delta: src_prec.log_delta,
             pt_k: pt.effective_k(),
@@ -162,7 +162,7 @@ pub fn test_decrypt_extract_base2k_mismatch_error<BE: Backend, F: TestScalar, E:
     let mut scratch = ctx.alloc_scratch();
     let ct = extract_fixture(ctx, &mut scratch.borrow());
     let mismatched_base2k = (ctx.base2k().as_usize() / 2).into();
-    let mut pt = ctx.host_module.ckks_pt_vec_znx_alloc(mismatched_base2k, src_prec);
+    let mut pt = ctx.host_module.ckks_pt_vec_alloc(mismatched_base2k, src_prec);
     let err = ctx
         .module
         .ckks_decrypt(&mut pt, &ct, &ctx.sk, &mut scratch.borrow())
@@ -171,7 +171,7 @@ pub fn test_decrypt_extract_base2k_mismatch_error<BE: Backend, F: TestScalar, E:
         "decrypt_extract_base2k_mismatch",
         &err,
         CKKSCompositionError::PlaintextBase2KMismatch {
-            op: "ckks_extract_pt_znx",
+            op: "ckks_extract_pt",
             ct_base2k: ctx.base2k().as_usize(),
             pt_base2k: mismatched_base2k.as_usize(),
         },

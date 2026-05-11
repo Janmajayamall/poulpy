@@ -12,7 +12,7 @@ use rand_distr::num_traits::{Float, ToPrimitive};
 
 use crate::{CKKSInfos, CKKSMeta, SetCKKSInfos};
 
-use super::CKKSRnxScalar;
+use super::CKKSScalar;
 
 /// CKKS plaintext in the ZNX (torus) domain.
 pub struct CKKSPlaintext<D: Data = Vec<u8>> {
@@ -147,12 +147,12 @@ impl<D: Data> CKKSInfos for CKKSPlaintext<D> {
     }
 }
 
-pub trait CKKSPlaintextVecHostCodec<F: CKKSRnxScalar>: CKKSInfos + LWEInfos {
+pub trait CKKSPlaintextVecHostCodec<F: CKKSScalar>: CKKSInfos + LWEInfos {
     fn encode_host_floats(&mut self, coeffs: &[F]) -> Result<()>;
     fn decode_host_floats(&self, coeffs: &mut [F]) -> Result<()>;
 }
 
-impl<F: CKKSRnxScalar, D: HostDataMut + HostDataRef> CKKSPlaintextVecHostCodec<F> for CKKSPlaintext<D> {
+impl<F: CKKSScalar, D: HostDataMut + HostDataRef> CKKSPlaintextVecHostCodec<F> for CKKSPlaintext<D> {
     fn encode_host_floats(&mut self, coeffs: &[F]) -> Result<()> {
         let log_delta = self.log_delta();
         let log_budget = self.log_budget();

@@ -183,7 +183,7 @@ pub trait CKKSMulDefault<BE: Backend> {
         Ok(())
     }
 
-    fn ckks_mul_pt_vec_znx_tmp_bytes_default<R, A>(&self, res: &R, a: &A, b: &CKKSMeta) -> usize
+    fn ckks_mul_pt_vec_tmp_bytes_default<R, A>(&self, res: &R, a: &A, b: &CKKSMeta) -> usize
     where
         R: GLWEInfos,
         A: GLWEInfos,
@@ -214,11 +214,11 @@ pub trait CKKSMulDefault<BE: Backend> {
                 .max(self.glwe_rotate_tmp_bytes())
     }
 
-    fn ckks_mul_pt_vec_znx_into_default<Dst, A, P>(
+    fn ckks_mul_pt_vec_into_default<Dst, A, P>(
         &self,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -228,46 +228,33 @@ pub trait CKKSMulDefault<BE: Backend> {
         A: GLWEToBackendRef<BE> + CKKSInfos + GLWEInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        let (res_log_budget, res_log_delta, cnv_offset) = get_mul_pt_params(dst, a, pt_znx)?;
-        self.glwe_mul_plain(
-            cnv_offset,
-            dst,
-            a,
-            a.effective_k(),
-            pt_znx,
-            pt_znx.max_k().as_usize(),
-            scratch,
-        );
+        let (res_log_budget, res_log_delta, cnv_offset) = get_mul_pt_params(dst, a, pt)?;
+        self.glwe_mul_plain(cnv_offset, dst, a, a.effective_k(), pt, pt.max_k().as_usize(), scratch);
         dst.set_log_budget(res_log_budget);
         dst.set_log_delta(res_log_delta);
         Ok(())
     }
 
-    fn ckks_mul_pt_vec_znx_assign_default<Dst, P>(
-        &self,
-        dst: &mut Dst,
-        pt_znx: &P,
-        scratch: &mut ScratchArena<'_, BE>,
-    ) -> Result<()>
+    fn ckks_mul_pt_vec_assign_default<Dst, P>(&self, dst: &mut Dst, pt: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         P: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos + CKKSInfos,
         Self: GLWECopy<BE> + GLWEMulPlain<BE> + ModuleCoreAlloc<OwnedBuf = BE::OwnedBuf> + VecZnxCopyBackend<BE>,
         Dst: GLWEToBackendMut<BE> + CKKSInfos + SetCKKSInfos + GLWEInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        let (res_log_budget, res_log_delta, cnv_offset) = get_mul_pt_params(dst, dst, pt_znx)?;
+        let (res_log_budget, res_log_delta, cnv_offset) = get_mul_pt_params(dst, dst, pt)?;
         let dst_effective_k = dst.effective_k();
-        self.glwe_mul_plain_assign(cnv_offset, dst, dst_effective_k, pt_znx, pt_znx.max_k().as_usize(), scratch);
+        self.glwe_mul_plain_assign(cnv_offset, dst, dst_effective_k, pt, pt.max_k().as_usize(), scratch);
         dst.set_log_budget(res_log_budget);
         dst.set_log_delta(res_log_delta);
         Ok(())
     }
 
-    fn ckks_mul_pt_const_znx_into_default<Dst, A, P>(
+    fn ckks_mul_pt_const_into_default<Dst, A, P>(
         &self,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -278,15 +265,15 @@ pub trait CKKSMulDefault<BE: Backend> {
         A: GLWEToBackendRef<BE> + CKKSInfos + GLWEInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        let (res_log_budget, res_log_delta, cnv_offset) = get_mul_pt_params(dst, a, pt_znx)?;
-        self.glwe_mul_const(cnv_offset, dst, a, pt_znx, pt_coeff, scratch);
+        let (res_log_budget, res_log_delta, cnv_offset) = get_mul_pt_params(dst, a, pt)?;
+        self.glwe_mul_const(cnv_offset, dst, a, pt, pt_coeff, scratch);
 
         dst.set_log_budget(res_log_budget);
         dst.set_log_delta(res_log_delta);
         Ok(())
     }
 
-    fn ckks_mul_pt_const_znx_assign_default<Dst, P>(
+    fn ckks_mul_pt_const_assign_default<Dst, P>(
         &self,
         dst: &mut Dst,
         cnst: &P,

@@ -148,8 +148,8 @@ pub fn test_affine_pt_vec_into_aligned<BE: Backend, F: TestScalar, E: Negacyclic
     let want_im: Vec<F> = vec![F::zero(); a_re.len()];
 
     let a = ctx.encrypt(ctx.max_k(), &a_re, &a_im, &mut scratch.borrow());
-    let scale_pt = ctx.const_full_rnx(Some(scale_f64), None, ctx.meta_pt());
-    let offset_pt = ctx.const_full_rnx(Some(offset_f64), None, ctx.meta_pt());
+    let scale_pt = ctx.const_full(Some(scale_f64), None, ctx.meta_pt());
+    let offset_pt = ctx.const_full(Some(offset_f64), None, ctx.meta_pt());
     let mut dst = ctx.alloc_ct(ctx.max_k());
 
     ctx.module
@@ -175,8 +175,8 @@ pub fn test_affine_pt_vec_assign_aligned<BE: Backend, F: TestScalar, E: Negacycl
     let want_im: Vec<F> = vec![F::zero(); a_re.len()];
 
     let mut ct = ctx.encrypt(ctx.max_k(), &a_re, &a_im, &mut scratch.borrow());
-    let scale_pt = ctx.const_full_rnx(Some(scale_f64), None, ctx.meta_pt());
-    let offset_pt = ctx.const_full_rnx(Some(offset_f64), None, ctx.meta_pt());
+    let scale_pt = ctx.const_full(Some(scale_f64), None, ctx.meta_pt());
+    let offset_pt = ctx.const_full(Some(offset_f64), None, ctx.meta_pt());
 
     ctx.module
         .ckks_affine_pt_vec_assign(&mut ct, &scale_pt, &offset_pt, &mut scratch.borrow())

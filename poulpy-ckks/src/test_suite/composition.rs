@@ -12,12 +12,12 @@ use poulpy_hal::{
     layouts::ScratchOwned,
 };
 
-fn constant_rnx<BE: super::helpers::TestBackend, F: TestScalar, E: NegacyclicFFT<F>>(
+fn constant<BE: super::helpers::TestBackend, F: TestScalar, E: NegacyclicFFT<F>>(
     ctx: &TestContext<BE, F, E>,
     c: (f64, f64),
 ) -> CKKSPlaintext<Vec<u8>> {
     let m = ctx.params.n / 2;
-    ctx.encode_pt_znx(&vec![F::from_f64(c.0).unwrap(); m], &vec![F::from_f64(c.1).unwrap(); m])
+    ctx.encode_pt(&vec![F::from_f64(c.0).unwrap(); m], &vec![F::from_f64(c.1).unwrap(); m])
 }
 
 fn alloc_composition_scratch<BE: TestCompositionBackend, F: TestScalar, E: NegacyclicFFT<F>>(
@@ -28,8 +28,8 @@ where
 {
     let ct_infos = ctx.ct_infos();
     let prec = ctx.meta_pt();
-    let mul_pt_vec_rnx = ctx.module.ckks_mul_pt_vec_znx_tmp_bytes(&ct_infos, &ct_infos, &prec);
-    ScratchOwned::<BE>::alloc(ctx.scratch_size.max(mul_pt_vec_rnx))
+    let mul_pt_vec = ctx.module.ckks_mul_pt_vec_tmp_bytes(&ct_infos, &ct_infos, &prec);
+    ScratchOwned::<BE>::alloc(ctx.scratch_size.max(mul_pt_vec))
 }
 
 fn poly2_expected<BE: super::helpers::TestBackend, F: TestScalar, E: NegacyclicFFT<F>>(
@@ -98,8 +98,8 @@ pub fn test_linear_sum<BE: TestCompositionBackend, F: TestScalar, E: NegacyclicF
     let c2 = (-0.375, 0.25);
     let c1_q = ctx.quantized_const_pt(c1.0, c1.1);
     let c2_q = ctx.quantized_const_pt(c2.0, c2.1);
-    let pt1 = constant_rnx(ctx, c1);
-    let pt2 = constant_rnx(ctx, c2);
+    let pt1 = constant(ctx, c1);
+    let pt2 = constant(ctx, c2);
     let (want_re, want_im) = same_offset_expected(ctx, c1_q, c2_q);
 
     let x = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
@@ -109,10 +109,10 @@ pub fn test_linear_sum<BE: TestCompositionBackend, F: TestScalar, E: NegacyclicF
     let mut term1 = ctx.alloc_ct(x.log_budget());
     let mut term2 = ctx.alloc_ct(x.log_budget());
     ctx.module
-        .ckks_mul_pt_vec_znx_into(&mut term1, &x, &pt1, &mut scratch.borrow())
+        .ckks_mul_pt_vec_into(&mut term1, &x, &pt1, &mut scratch.borrow())
         .unwrap();
     ctx.module
-        .ckks_mul_pt_vec_znx_into(&mut term2, &x, &pt2, &mut scratch.borrow())
+        .ckks_mul_pt_vec_into(&mut term2, &x, &pt2, &mut scratch.borrow())
         .unwrap();
 
     assert_eq!(
@@ -133,8 +133,8 @@ pub fn test_poly2_sum<BE: TestCompositionBackend, F: TestScalar, E: NegacyclicFF
     let c2 = (-0.375, 0.25);
     let c1_q = ctx.quantized_const_pt(c1.0, c1.1);
     let c2_q = ctx.quantized_const_pt(c2.0, c2.1);
-    let pt1 = constant_rnx(ctx, c1);
-    let pt2 = constant_rnx(ctx, c2);
+    let pt1 = constant(ctx, c1);
+    let pt2 = constant(ctx, c2);
     let (want_re, want_im) = poly2_expected(ctx, (F::zero(), F::zero()), c1_q, c2_q);
 
     let x = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
@@ -150,10 +150,10 @@ pub fn test_poly2_sum<BE: TestCompositionBackend, F: TestScalar, E: NegacyclicFF
     let mut term1 = ctx.alloc_ct(x.log_budget());
     let mut term2 = ctx.alloc_ct(x2.log_budget());
     ctx.module
-        .ckks_mul_pt_vec_znx_into(&mut term1, &x, &pt1, &mut scratch.borrow())
+        .ckks_mul_pt_vec_into(&mut term1, &x, &pt1, &mut scratch.borrow())
         .unwrap();
     ctx.module
-        .ckks_mul_pt_vec_znx_into(&mut term2, &x2, &pt2, &mut scratch.borrow())
+        .ckks_mul_pt_vec_into(&mut term2, &x2, &pt2, &mut scratch.borrow())
         .unwrap();
 
     assert!(
@@ -178,9 +178,9 @@ pub fn test_poly2_sum_with_const<BE: TestCompositionBackend, F: TestScalar, E: N
     let c0_q = ctx.quantized_const_pt(c0.0, c0.1);
     let c1_q = ctx.quantized_const_pt(c1.0, c1.1);
     let c2_q = ctx.quantized_const_pt(c2.0, c2.1);
-    let pt0 = constant_rnx(ctx, c0);
-    let pt1 = constant_rnx(ctx, c1);
-    let pt2 = constant_rnx(ctx, c2);
+    let pt0 = constant(ctx, c0);
+    let pt1 = constant(ctx, c1);
+    let pt2 = constant(ctx, c2);
     let (want_re, want_im) = poly2_expected(ctx, c0_q, c1_q, c2_q);
 
     let x = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
@@ -191,15 +191,15 @@ pub fn test_poly2_sum_with_const<BE: TestCompositionBackend, F: TestScalar, E: N
         .ckks_square_into(&mut x2, &x, ctx.tsk(), &mut scratch.borrow())
         .unwrap();
 
-    // `mul_pt_vec_rnx` again allocates by post-op effective width; using
+    // `mul_pt_vec` again allocates by post-op effective width; using
     // `log_budget()` is a numeric shortcut that holds for this fixture.
     let mut term1 = ctx.alloc_ct(x.log_budget());
     let mut term2 = ctx.alloc_ct(x2.log_budget());
     ctx.module
-        .ckks_mul_pt_vec_znx_into(&mut term1, &x, &pt1, &mut scratch.borrow())
+        .ckks_mul_pt_vec_into(&mut term1, &x, &pt1, &mut scratch.borrow())
         .unwrap();
     ctx.module
-        .ckks_mul_pt_vec_znx_into(&mut term2, &x2, &pt2, &mut scratch.borrow())
+        .ckks_mul_pt_vec_into(&mut term2, &x2, &pt2, &mut scratch.borrow())
         .unwrap();
     let mut poly = ctx.alloc_ct(term2.effective_k());
     ctx.module
@@ -222,9 +222,9 @@ pub fn test_poly2_mul<BE: TestCompositionBackend, F: TestScalar, E: NegacyclicFF
     let c0_q = ctx.quantized_const_pt(c0.0, c0.1);
     let c1_q = ctx.quantized_const_pt(c1.0, c1.1);
     let c2_q = ctx.quantized_const_pt(c2.0, c2.1);
-    let pt0 = constant_rnx(ctx, c0);
-    let pt1 = constant_rnx(ctx, c1);
-    let pt2 = constant_rnx(ctx, c2);
+    let pt0 = constant(ctx, c0);
+    let pt1 = constant(ctx, c1);
+    let pt2 = constant(ctx, c2);
     let (want_re, want_im) = mul_by_y_expected(ctx, c0_q, c1_q, c2_q);
 
     let x = ctx.encrypt(ctx.max_k(), &ctx.re1, &ctx.im1, &mut scratch.borrow());
@@ -241,10 +241,10 @@ pub fn test_poly2_mul<BE: TestCompositionBackend, F: TestScalar, E: NegacyclicFF
     let mut term1 = ctx.alloc_ct(x.log_budget());
     let mut term2 = ctx.alloc_ct(x2.log_budget());
     ctx.module
-        .ckks_mul_pt_vec_znx_into(&mut term1, &x, &pt1, &mut scratch.borrow())
+        .ckks_mul_pt_vec_into(&mut term1, &x, &pt1, &mut scratch.borrow())
         .unwrap();
     ctx.module
-        .ckks_mul_pt_vec_znx_into(&mut term2, &x2, &pt2, &mut scratch.borrow())
+        .ckks_mul_pt_vec_into(&mut term2, &x2, &pt2, &mut scratch.borrow())
         .unwrap();
     let mut poly = ctx.alloc_ct(term2.effective_k());
     ctx.module

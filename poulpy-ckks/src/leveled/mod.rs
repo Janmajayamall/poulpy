@@ -46,8 +46,8 @@ pub(crate) mod default {
     pub(crate) mod pow2 {
         pub(crate) use crate::default::pow2::*;
     }
-    pub(crate) mod pt_znx {
-        pub(crate) use crate::default::pt_znx::*;
+    pub(crate) mod plaintext {
+        pub(crate) use crate::default::plaintext::*;
     }
     pub(crate) mod rescale {
         pub(crate) use crate::default::rescale::*;

@@ -41,25 +41,25 @@ use crate::{CKKSCtBounds, CKKSInfos, SetCKKSInfos, oep::CKKSMulImpl};
 /// Errors with `MultiplicationPrecisionUnderflow` if `natural_budget < 0`
 /// (i.e. `min(log_budget) < max(log_delta)`).
 ///
-/// ## Ciphertext–plaintext-vector multiplication (`ckks_mul_pt_vec_znx_*`)
+/// ## Ciphertext–plaintext-vector multiplication (`ckks_mul_pt_vec_*`)
 ///
 /// ```text
-/// natural_budget = a.log_budget − pt_znx.log_delta
+/// natural_budget = a.log_budget − pt.log_delta
 /// log_delta_out  = a.log_delta
 /// natural_eff_k  = natural_budget + a.log_delta
-///                = a.effective_k() − pt_znx.log_delta
+///                = a.effective_k() − pt.log_delta
 /// offset         = max(0, natural_eff_k − dst.max_k())
 ///
 /// log_budget_out = natural_budget − offset
 /// ```
 ///
-/// **Capacity consumed**: `pt_znx.log_delta` bits (precision of the plaintext
+/// **Capacity consumed**: `pt.log_delta` bits (precision of the plaintext
 /// multiplier), plus `offset`.
 ///
-/// ## Ciphertext–plaintext-constant multiplication (`ckks_mul_pt_const_znx_*`)
+/// ## Ciphertext–plaintext-constant multiplication (`ckks_mul_pt_const_*`)
 ///
 /// Identical metadata rule to the `pt_vec` variant above, using
-/// `pt_znx.log_delta` as the plaintext precision.
+/// `pt.log_delta` as the plaintext precision.
 ///
 /// # Rescaling after multiplication
 ///
@@ -78,7 +78,7 @@ pub trait CKKSMulOps<BE: Backend + CKKSMulImpl<BE>> {
         R: CKKSCtBounds,
         T: GGLWEInfos;
 
-    fn ckks_mul_pt_vec_znx_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
+    fn ckks_mul_pt_vec_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
     where
         R: CKKSCtBounds,
         A: CKKSCtBounds,
@@ -123,38 +123,32 @@ pub trait CKKSMulOps<BE: Backend + CKKSMulImpl<BE>> {
         Dst: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSCtBounds + SetCKKSInfos,
         T: GGLWEInfos + GLWETensorKeyPreparedToBackendRef<BE>;
 
-    /// Computes `dst = a * pt_znx` where `pt_znx` is a full plaintext polynomial.
+    /// Computes `dst = a * pt` where `pt` is a full plaintext polynomial.
     ///
     /// See the trait-level documentation for the exact metadata rule including
     /// the capacity offset.
-    fn ckks_mul_pt_vec_znx_into<Dst, A, P>(
-        &self,
-        dst: &mut Dst,
-        a: &A,
-        pt_znx: &P,
-        scratch: &mut ScratchArena<'_, BE>,
-    ) -> Result<()>
+    fn ckks_mul_pt_vec_into<Dst, A, P>(&self, dst: &mut Dst, a: &A, pt: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst *= pt_znx` in-place.
-    fn ckks_mul_pt_vec_znx_assign<Dst, P>(&self, dst: &mut Dst, pt_znx: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    /// Computes `dst *= pt` in-place.
+    fn ckks_mul_pt_vec_assign<Dst, P>(&self, dst: &mut Dst, pt: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSCtBounds + SetCKKSInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst = a * pt_znx[pt_coeff]`, multiplying by a single
-    /// quantized constant from coefficient `pt_coeff` of `pt_znx`.
+    /// Computes `dst = a * pt[pt_coeff]`, multiplying by a single
+    /// quantized constant from coefficient `pt_coeff` of `pt`.
     ///
     /// See the trait-level documentation for the exact metadata rule including
     /// the capacity offset.
-    fn ckks_mul_pt_const_znx_into<Dst, A, P>(
+    fn ckks_mul_pt_const_into<Dst, A, P>(
         &self,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -163,11 +157,11 @@ pub trait CKKSMulOps<BE: Backend + CKKSMulImpl<BE>> {
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst *= pt_znx[pt_coeff]` in-place.
-    fn ckks_mul_pt_const_znx_assign<Dst, P>(
+    /// Computes `dst *= pt[pt_coeff]` in-place.
+    fn ckks_mul_pt_const_assign<Dst, P>(
         &self,
         dst: &mut Dst,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>

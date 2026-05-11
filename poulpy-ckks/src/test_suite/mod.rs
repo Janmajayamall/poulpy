@@ -181,8 +181,8 @@ macro_rules! ckks_backend_test_suite {
             );
             run_test!(compact_limbs_copy, $crate::test_suite::errors::test_compact_limbs_copy);
             run_test!(
-                add_pt_vec_znx_alignment_error,
-                $crate::test_suite::errors::test_add_pt_vec_znx_alignment_error
+                add_pt_vec_alignment_error,
+                $crate::test_suite::errors::test_add_pt_vec_alignment_error
             );
             run_test!(add_ct_aligned, $crate::test_suite::add::test_add_ct_aligned);
             run_test!(add_ct_delta_a_lt_b, $crate::test_suite::add::test_add_ct_delta_a_lt_b);
@@ -207,17 +207,14 @@ macro_rules! ckks_backend_test_suite {
                 add_ct_assign_self_gt,
                 $crate::test_suite::add::test_add_ct_assign_self_gt
             );
+            run_test!(add_pt_vec_assign, $crate::test_suite::add::test_add_pt_vec_assign);
             run_test!(
-                add_pt_vec_znx_assign,
-                $crate::test_suite::add::test_add_pt_vec_znx_assign
+                add_pt_vec_into_aligned,
+                $crate::test_suite::add::test_add_pt_vec_into_aligned
             );
             run_test!(
-                add_pt_vec_znx_into_aligned,
-                $crate::test_suite::add::test_add_pt_vec_znx_into_aligned
-            );
-            run_test!(
-                add_pt_vec_znx_into_delta_log_delta,
-                $crate::test_suite::add::test_add_pt_vec_znx_into_delta_log_delta
+                add_pt_vec_into_delta_log_delta,
+                $crate::test_suite::add::test_add_pt_vec_into_delta_log_delta
             );
             run_test!(
                 add_const_into_aligned,
@@ -238,12 +235,12 @@ macro_rules! ckks_backend_test_suite {
                 $crate::test_suite::add::test_add_const_into_real_only
             );
             run_test!(
-                add_pt_vec_znx_into_smaller_output,
-                $crate::test_suite::add::test_add_pt_vec_znx_into_smaller_output
+                add_pt_vec_into_smaller_output,
+                $crate::test_suite::add::test_add_pt_vec_into_smaller_output
             );
             run_test!(
-                add_pt_vec_znx_base2k_mismatch_error,
-                $crate::test_suite::add::test_add_pt_vec_znx_base2k_mismatch_error
+                add_pt_vec_base2k_mismatch_error,
+                $crate::test_suite::add::test_add_pt_vec_base2k_mismatch_error
             );
             run_test!(
                 add_ct_aligned_unsafe,
@@ -254,12 +251,12 @@ macro_rules! ckks_backend_test_suite {
                 $crate::test_suite::add_unsafe::test_add_ct_assign_aligned_unsafe
             );
             run_test!(
-                add_pt_vec_znx_into_aligned_unsafe,
-                $crate::test_suite::add_unsafe::test_add_pt_vec_znx_into_aligned_unsafe
+                add_pt_vec_into_aligned_unsafe,
+                $crate::test_suite::add_unsafe::test_add_pt_vec_into_aligned_unsafe
             );
             run_test!(
-                add_const_znx_into_aligned_unsafe,
-                $crate::test_suite::add_unsafe::test_add_const_znx_into_aligned_unsafe
+                add_const_into_aligned_unsafe,
+                $crate::test_suite::add_unsafe::test_add_const_into_aligned_unsafe
             );
             run_test!(sub_ct_aligned, $crate::test_suite::sub::test_sub_ct_aligned);
             run_test!(sub_ct_delta_a_lt_b, $crate::test_suite::sub::test_sub_ct_delta_a_lt_b);
@@ -284,22 +281,19 @@ macro_rules! ckks_backend_test_suite {
                 sub_ct_assign_self_gt,
                 $crate::test_suite::sub::test_sub_ct_assign_self_gt
             );
+            run_test!(sub_pt_vec_assign, $crate::test_suite::sub::test_sub_pt_vec_assign);
+            run_test!(sub_pt_vec_into, $crate::test_suite::sub::test_sub_pt_vec);
             run_test!(
-                sub_pt_vec_znx_assign,
-                $crate::test_suite::sub::test_sub_pt_vec_znx_assign
-            );
-            run_test!(sub_pt_vec_znx_into, $crate::test_suite::sub::test_sub_pt_vec_znx);
-            run_test!(
-                sub_pt_vec_znx_into_delta_log_delta,
-                $crate::test_suite::sub::test_sub_pt_vec_znx_into_delta_log_delta
+                sub_pt_vec_into_delta_log_delta,
+                $crate::test_suite::sub::test_sub_pt_vec_into_delta_log_delta
             );
             run_test!(
-                sub_pt_vec_znx_into_smaller_output,
-                $crate::test_suite::sub::test_sub_pt_vec_znx_into_smaller_output
+                sub_pt_vec_into_smaller_output,
+                $crate::test_suite::sub::test_sub_pt_vec_into_smaller_output
             );
             run_test!(
-                sub_pt_const_znx_into_aligned,
-                $crate::test_suite::sub::test_sub_pt_const_znx_into_aligned
+                sub_pt_const_into_aligned,
+                $crate::test_suite::sub::test_sub_pt_const_into_aligned
             );
             run_test!(sub_one_assign, $crate::test_suite::sub::test_sub_one_assign);
             run_test!(
@@ -311,12 +305,12 @@ macro_rules! ckks_backend_test_suite {
                 $crate::test_suite::sub_unsafe::test_sub_ct_assign_aligned_unsafe
             );
             run_test!(
-                sub_pt_vec_znx_into_unsafe,
-                $crate::test_suite::sub_unsafe::test_sub_pt_vec_znx_into_unsafe
+                sub_pt_vec_into_unsafe,
+                $crate::test_suite::sub_unsafe::test_sub_pt_vec_into_unsafe
             );
             run_test!(
-                sub_pt_const_znx_into_aligned_unsafe,
-                $crate::test_suite::sub_unsafe::test_sub_pt_const_znx_into_aligned_unsafe
+                sub_pt_const_into_aligned_unsafe,
+                $crate::test_suite::sub_unsafe::test_sub_pt_const_into_aligned_unsafe
             );
             run_test!(
                 dot_product_overflow_guard,
@@ -386,21 +380,18 @@ macro_rules! ckks_backend_test_suite {
                 $crate::test_suite::mul::test_square_smaller_output
             );
             run_test!(
-                mul_pt_vec_znx_into_aligned,
-                $crate::test_suite::mul::test_mul_pt_vec_znx_into_aligned
+                mul_pt_vec_into_aligned,
+                $crate::test_suite::mul::test_mul_pt_vec_into_aligned
             );
             run_test!(
-                mul_pt_vec_znx_into_delta_log_delta,
-                $crate::test_suite::mul::test_mul_pt_vec_znx_into_delta_log_delta
+                mul_pt_vec_into_delta_log_delta,
+                $crate::test_suite::mul::test_mul_pt_vec_into_delta_log_delta
             );
             run_test!(
-                mul_pt_vec_znx_into_smaller_output,
-                $crate::test_suite::mul::test_mul_pt_vec_znx_into_smaller_output
+                mul_pt_vec_into_smaller_output,
+                $crate::test_suite::mul::test_mul_pt_vec_into_smaller_output
             );
-            run_test!(
-                mul_pt_vec_znx_assign,
-                $crate::test_suite::mul::test_mul_pt_vec_znx_assign
-            );
+            run_test!(mul_pt_vec_assign, $crate::test_suite::mul::test_mul_pt_vec_assign);
             run_test!(
                 mul_const_into_aligned,
                 $crate::test_suite::mul::test_mul_pt_const_into_aligned
@@ -409,14 +400,6 @@ macro_rules! ckks_backend_test_suite {
             run_test!(
                 mul_const_into_delta_log_delta,
                 $crate::test_suite::mul::test_mul_pt_const_into_delta_log_delta
-            );
-            run_test!(
-                mul_const_into_real_only,
-                $crate::test_suite::mul::test_mul_pt_const_into_real_only
-            );
-            run_test!(
-                mul_const_znx_into_aligned,
-                $crate::test_suite::mul::test_mul_pt_const_znx_into_aligned
             );
             run_test!(
                 mul_ct_explicit_metadata_error,
@@ -502,20 +485,20 @@ macro_rules! ckks_backend_test_suite {
                 $crate::test_suite::mul_add::test_mul_add_ct_unaligned_dst
             );
             run_test!(
-                mul_add_pt_vec_znx_into_aligned,
-                $crate::test_suite::mul_add::test_mul_add_pt_vec_znx_into_aligned
+                mul_add_pt_vec_into_aligned,
+                $crate::test_suite::mul_add::test_mul_add_pt_vec_into_aligned
             );
             run_test!(
-                mul_add_pt_vec_znx_into_delta_log_delta,
-                $crate::test_suite::mul_add::test_mul_add_pt_vec_znx_into_delta_log_delta
+                mul_add_pt_vec_into_delta_log_delta,
+                $crate::test_suite::mul_add::test_mul_add_pt_vec_into_delta_log_delta
             );
             run_test!(
-                mul_add_const_znx_into_aligned,
-                $crate::test_suite::mul_add::test_mul_add_const_znx_into_aligned
+                mul_add_const_into_aligned,
+                $crate::test_suite::mul_add::test_mul_add_const_into_aligned
             );
             run_test!(
-                mul_add_const_znx_zero_preserves_dst_meta,
-                $crate::test_suite::mul_add::test_mul_add_const_znx_zero_preserves_dst_meta
+                mul_add_const_zero_preserves_dst_meta,
+                $crate::test_suite::mul_add::test_mul_add_const_zero_preserves_dst_meta
             );
             run_test!(
                 affine_pt_const_into_aligned,
@@ -543,20 +526,20 @@ macro_rules! ckks_backend_test_suite {
                 $crate::test_suite::mul_sub::test_mul_sub_ct_unaligned_dst
             );
             run_test!(
-                mul_sub_pt_vec_znx_aligned,
-                $crate::test_suite::mul_sub::test_mul_sub_pt_vec_znx_aligned
+                mul_sub_pt_vec_aligned,
+                $crate::test_suite::mul_sub::test_mul_sub_pt_vec_aligned
             );
             run_test!(
-                mul_sub_pt_vec_znx_into_delta_log_delta,
-                $crate::test_suite::mul_sub::test_mul_sub_pt_vec_znx_into_delta_log_delta
+                mul_sub_pt_vec_into_delta_log_delta,
+                $crate::test_suite::mul_sub::test_mul_sub_pt_vec_into_delta_log_delta
             );
             run_test!(
-                mul_sub_pt_const_znx_into_aligned,
-                $crate::test_suite::mul_sub::test_mul_sub_pt_const_znx_into_aligned
+                mul_sub_pt_const_into_aligned,
+                $crate::test_suite::mul_sub::test_mul_sub_pt_const_into_aligned
             );
             run_test!(
-                mul_sub_pt_const_znx_zero_preserves_dst_meta,
-                $crate::test_suite::mul_sub::test_mul_sub_pt_const_znx_zero_preserves_dst_meta
+                mul_sub_pt_const_zero_preserves_dst_meta,
+                $crate::test_suite::mul_sub::test_mul_sub_pt_const_zero_preserves_dst_meta
             );
             run_test!(
                 dot_product_ct_aligned,
@@ -579,12 +562,12 @@ macro_rules! ckks_backend_test_suite {
                 $crate::test_suite::dot_product::test_dot_product_ct_smaller_output
             );
             run_test!(
-                dot_product_pt_vec_znx_aligned,
-                $crate::test_suite::dot_product::test_dot_product_pt_vec_znx_aligned
+                dot_product_pt_vec_aligned,
+                $crate::test_suite::dot_product::test_dot_product_pt_vec_aligned
             );
             run_test!(
-                dot_product_const_znx_aligned,
-                $crate::test_suite::dot_product::test_dot_product_const_znx_aligned
+                dot_product_const_aligned,
+                $crate::test_suite::dot_product::test_dot_product_const_aligned
             );
         }
     };

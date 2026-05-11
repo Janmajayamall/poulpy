@@ -1,15 +1,15 @@
 use anyhow::Result;
 use poulpy_core::{
     GLWENormalize, GLWEShift, GLWESub, ScratchArenaTakeCore,
-    layouts::{GLWEPlaintext, GLWEPlaintextLayout, GLWEToBackendMut, LWEInfos},
+    layouts::{GLWEToBackendMut, LWEInfos},
 };
 use poulpy_hal::{
-    api::{ModuleN, ScratchAvailable, VecZnxRshSubBackend, VecZnxRshSubCoeffIntoBackend, VecZnxRshTmpBytes},
+    api::{ScratchAvailable, VecZnxRshSubBackend, VecZnxRshSubCoeffIntoBackend, VecZnxRshTmpBytes},
     layouts::{Backend, Module, ScratchArena},
 };
 
 use crate::{
-    CKKSInfos, CKKSMeta, GLWEToBackendRef, SetCKKSInfos, checked_log_budget_sub, ckks_offset_binary, ckks_offset_unary,
+    CKKSInfos, GLWEToBackendRef, SetCKKSInfos, checked_log_budget_sub, ckks_offset_binary, ckks_offset_unary,
     default::add::ckks_one_pt, leveled::default::CKKSPlaintextDefault,
 };
 
@@ -23,26 +23,11 @@ pub trait CKKSSubDefault<BE: Backend> {
             .max(self.glwe_normalize_tmp_bytes())
     }
 
-    fn ckks_sub_pt_vec_znx_tmp_bytes_default(&self) -> usize
+    fn ckks_sub_pt_vec_tmp_bytes_default(&self) -> usize
     where
         Self: GLWEShift<BE> + GLWENormalize<BE> + VecZnxRshTmpBytes,
     {
         self.ckks_sub_tmp_bytes_default()
-    }
-
-    #[allow(dead_code)]
-    fn ckks_sub_pt_vec_rnx_tmp_bytes_default<R, A>(&self, res: &R, _a: &A, b: &CKKSMeta) -> usize
-    where
-        R: LWEInfos,
-        A: LWEInfos,
-        Self: ModuleN + GLWEShift<BE> + GLWENormalize<BE> + VecZnxRshTmpBytes,
-    {
-        let b_infos = GLWEPlaintextLayout {
-            n: self.n().into(),
-            base2k: res.base2k(),
-            k: b.min_k(res.base2k()),
-        };
-        GLWEPlaintext::<Vec<u8>>::bytes_of_from_infos(&b_infos) + self.ckks_sub_pt_vec_znx_tmp_bytes_default()
     }
 
     fn ckks_sub_pt_const_tmp_bytes_default(&self) -> usize
@@ -141,14 +126,14 @@ pub trait CKKSSubDefault<BE: Backend> {
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
         let one = ckks_one_pt::<BE>(dst.base2k())?;
-        self.ckks_sub_pt_const_znx_assign_default(dst, 0, &one, 0, scratch)
+        self.ckks_sub_pt_const_assign_default(dst, 0, &one, 0, scratch)
     }
 
-    fn ckks_sub_pt_vec_znx_into_default<Dst, A, P>(
+    fn ckks_sub_pt_vec_into_default<Dst, A, P>(
         &self,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -158,16 +143,16 @@ pub trait CKKSSubDefault<BE: Backend> {
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        self.ckks_sub_pt_vec_znx_into_unsafe_default(dst, a, pt_znx, scratch)?;
+        self.ckks_sub_pt_vec_into_unsafe_default(dst, a, pt, scratch)?;
         self.glwe_normalize_assign(dst, scratch);
         Ok(())
     }
 
-    fn ckks_sub_pt_vec_znx_into_unsafe_default<Dst, A, P>(
+    fn ckks_sub_pt_vec_into_unsafe_default<Dst, A, P>(
         &self,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -180,32 +165,27 @@ pub trait CKKSSubDefault<BE: Backend> {
         let offset = ckks_offset_unary(dst, a);
         self.glwe_lsh(dst, a, offset, scratch);
         dst.set_meta(a.meta());
-        dst.set_log_budget(checked_log_budget_sub("sub_pt_vec_znx", a.log_budget(), offset)?);
-        self.ckks_sub_pt_vec_znx_assign_unsafe_default(dst, pt_znx, scratch)?;
+        dst.set_log_budget(checked_log_budget_sub("sub_pt_vec", a.log_budget(), offset)?);
+        self.ckks_sub_pt_vec_assign_unsafe_default(dst, pt, scratch)?;
         Ok(())
     }
 
-    fn ckks_sub_pt_vec_znx_assign_default<Dst, P>(
-        &self,
-        dst: &mut Dst,
-        pt_znx: &P,
-        scratch: &mut ScratchArena<'_, BE>,
-    ) -> Result<()>
+    fn ckks_sub_pt_vec_assign_default<Dst, P>(&self, dst: &mut Dst, pt: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         Self: VecZnxRshSubBackend<BE> + GLWENormalize<BE> + CKKSPlaintextDefault<BE>,
         Dst: GLWEToBackendMut<BE> + CKKSInfos + LWEInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        self.ckks_sub_pt_vec_znx_assign_unsafe_default(dst, pt_znx, scratch)?;
+        self.ckks_sub_pt_vec_assign_unsafe_default(dst, pt, scratch)?;
         self.glwe_normalize_assign(dst, scratch);
         Ok(())
     }
 
-    fn ckks_sub_pt_vec_znx_assign_unsafe_default<Dst, P>(
+    fn ckks_sub_pt_vec_assign_unsafe_default<Dst, P>(
         &self,
         dst: &mut Dst,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -214,17 +194,17 @@ pub trait CKKSSubDefault<BE: Backend> {
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        CKKSPlaintextDefault::ckks_sub_pt_vec_znx_into_default(self, dst, pt_znx, scratch)?;
+        CKKSPlaintextDefault::ckks_sub_pt_vec_into_default(self, dst, pt, scratch)?;
         Ok(())
     }
 
-    fn ckks_sub_pt_const_znx_into_default<Dst, A, P>(
+    fn ckks_sub_pt_const_into_default<Dst, A, P>(
         &self,
         dst: &mut Dst,
         a: &A,
         dst_coeff: usize,
-        cst_znx: &P,
-        cst_coeff: usize,
+        cst: &P,
+        const_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -234,18 +214,18 @@ pub trait CKKSSubDefault<BE: Backend> {
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        self.ckks_sub_pt_const_znx_into_unsafe_default(dst, a, dst_coeff, cst_znx, cst_coeff, scratch)?;
+        self.ckks_sub_pt_const_into_unsafe_default(dst, a, dst_coeff, cst, const_coeff, scratch)?;
         self.glwe_normalize_assign(dst, scratch);
         Ok(())
     }
 
-    fn ckks_sub_pt_const_znx_into_unsafe_default<Dst, A, P>(
+    fn ckks_sub_pt_const_into_unsafe_default<Dst, A, P>(
         &self,
         dst: &mut Dst,
         a: &A,
         dst_coeff: usize,
-        cst_znx: &P,
-        cst_coeff: usize,
+        cst: &P,
+        const_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -258,16 +238,16 @@ pub trait CKKSSubDefault<BE: Backend> {
         let offset = ckks_offset_unary(dst, a);
         self.glwe_lsh(dst, a, offset, scratch);
         dst.set_meta(a.meta());
-        dst.set_log_budget(checked_log_budget_sub("sub_pt_const_znx", a.log_budget(), offset)?);
-        self.ckks_sub_pt_const_znx_assign_unsafe_default(dst, dst_coeff, cst_znx, cst_coeff, scratch)
+        dst.set_log_budget(checked_log_budget_sub("sub_pt_const", a.log_budget(), offset)?);
+        self.ckks_sub_pt_const_assign_unsafe_default(dst, dst_coeff, cst, const_coeff, scratch)
     }
 
-    fn ckks_sub_pt_const_znx_assign_default<Dst, P>(
+    fn ckks_sub_pt_const_assign_default<Dst, P>(
         &self,
         dst: &mut Dst,
         dst_coeff: usize,
-        cst_znx: &P,
-        cst_coeff: usize,
+        cst: &P,
+        const_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -276,17 +256,17 @@ pub trait CKKSSubDefault<BE: Backend> {
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        self.ckks_sub_pt_const_znx_assign_unsafe_default(dst, dst_coeff, cst_znx, cst_coeff, scratch)?;
+        self.ckks_sub_pt_const_assign_unsafe_default(dst, dst_coeff, cst, const_coeff, scratch)?;
         self.glwe_normalize_assign(dst, scratch);
         Ok(())
     }
 
-    fn ckks_sub_pt_const_znx_assign_unsafe_default<Dst, P>(
+    fn ckks_sub_pt_const_assign_unsafe_default<Dst, P>(
         &self,
         dst: &mut Dst,
         dst_coeff: usize,
-        cst_znx: &P,
-        cst_coeff: usize,
+        cst: &P,
+        const_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -295,7 +275,7 @@ pub trait CKKSSubDefault<BE: Backend> {
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchAvailable + ScratchArenaTakeCore<'a, BE>,
     {
-        CKKSPlaintextDefault::ckks_sub_pt_cst_znx_into_default(self, dst, dst_coeff, cst_znx, cst_coeff, scratch)?;
+        CKKSPlaintextDefault::ckks_sub_pt_const_into_default(self, dst, dst_coeff, cst, const_coeff, scratch)?;
         Ok(())
     }
 }

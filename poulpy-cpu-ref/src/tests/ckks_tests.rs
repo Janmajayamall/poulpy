@@ -6,6 +6,7 @@ const ATK_ROTATIONS: &[i64] = &[1, 7];
 fn encode_decode_reim_roundtrip() {
     use crate::FFT64ReimTable;
     use poulpy_ckks::encoding::reim::Encoder;
+    use poulpy_ckks::layouts::CKKSModuleAlloc;
 
     let n = 16usize;
     let m = n / 2;
@@ -16,8 +17,7 @@ fn encode_decode_reim_roundtrip() {
     let encoder = Encoder::<FFT64ReimTable<f64>>::new::<f64>(m).unwrap();
 
     let host_module = poulpy_hal::layouts::Module::<poulpy_hal::layouts::HostBytesBackend>::new(n as u64);
-    let mut pt = poulpy_ckks::layouts::CKKSModuleAlloc::ckks_pt_vec_znx_alloc(
-        &host_module,
+    let mut pt = host_module.ckks_pt_vec_alloc(
         poulpy_core::layouts::Base2K(16),
         poulpy_ckks::CKKSMeta {
             log_delta: 40,

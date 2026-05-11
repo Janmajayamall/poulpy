@@ -7,7 +7,7 @@ use poulpy_hal::{
 };
 use rand_distr::num_traits::{Float, FloatConst, NumCast};
 
-use crate::{layouts::CKKSRnxScalar, layouts::plaintext::CKKSPlaintextVecHostCodec};
+use crate::{layouts::CKKSScalar, layouts::plaintext::CKKSPlaintextVecHostCodec};
 
 /// Slot encoder/decoder for CKKS real and imaginary vectors.
 ///
@@ -115,7 +115,7 @@ impl<T> Encoder<T> {
     /// Encodes complex slot values into a host-backed ZNX plaintext buffer.
     pub fn encode_reim<F, P>(&self, pt: &mut P, re: &[F], im: &[F]) -> Result<()>
     where
-        F: CKKSRnxScalar + Float + FloatConst + Debug + NumCast,
+        F: CKKSScalar + Float + FloatConst + Debug + NumCast,
         T: NegacyclicFFT<F>,
         P: CKKSPlaintextVecHostCodec<F>,
     {
@@ -128,7 +128,7 @@ impl<T> Encoder<T> {
     /// Decodes a host-backed ZNX plaintext buffer into complex slot values.
     pub fn decode_reim<F, P>(&self, pt: &P, re: &mut [F], im: &mut [F]) -> Result<()>
     where
-        F: CKKSRnxScalar + Float + FloatConst + Debug,
+        F: CKKSScalar + Float + FloatConst + Debug,
         T: NegacyclicFFT<F>,
         P: CKKSPlaintextVecHostCodec<F>,
     {

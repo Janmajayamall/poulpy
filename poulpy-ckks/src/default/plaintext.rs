@@ -19,7 +19,7 @@ use crate::{
 };
 
 pub trait CKKSPlaintextDefault<BE: Backend> {
-    fn ckks_add_pt_vec_znx_into_default<Dst, A>(&self, ct: &mut Dst, pt: &A, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    fn ckks_add_pt_vec_into_default<Dst, A>(&self, ct: &mut Dst, pt: &A, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
         Self: VecZnxRshAddIntoBackend<BE>,
@@ -37,7 +37,7 @@ pub trait CKKSPlaintextDefault<BE: Backend> {
         Ok(())
     }
 
-    fn ckks_add_pt_cst_znx_into_default<Dst, A>(
+    fn ckks_add_pt_const_into_default<Dst, A>(
         &self,
         ct: &mut Dst,
         coeff_ct: usize,
@@ -74,7 +74,7 @@ pub trait CKKSPlaintextDefault<BE: Backend> {
         Ok(())
     }
 
-    fn ckks_sub_pt_cst_znx_into_default<Dst, A>(
+    fn ckks_sub_pt_const_into_default<Dst, A>(
         &self,
         ct: &mut Dst,
         coeff_ct: usize,
@@ -111,7 +111,7 @@ pub trait CKKSPlaintextDefault<BE: Backend> {
         Ok(())
     }
 
-    fn ckks_sub_pt_vec_znx_into_default<Dst, A>(&self, ct: &mut Dst, pt_znx: &A, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    fn ckks_sub_pt_vec_into_default<Dst, A>(&self, ct: &mut Dst, pt: &A, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
         Self: VecZnxRshSubBackend<BE>,
@@ -119,34 +119,34 @@ pub trait CKKSPlaintextDefault<BE: Backend> {
         A: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
     {
         const OP: &str = "ckks_sub_pt_vec";
-        ensure_base2k_match(OP, ct.base2k().as_usize(), pt_znx.base2k().as_usize())?;
-        ensure_plaintext_degree_match(OP, ct.n().as_usize(), pt_znx.n().as_usize())?;
-        let offset = ensure_plaintext_alignment(OP, ct.log_budget(), pt_znx.log_delta(), pt_znx.max_k().as_usize())?;
+        ensure_base2k_match(OP, ct.base2k().as_usize(), pt.base2k().as_usize())?;
+        ensure_plaintext_degree_match(OP, ct.n().as_usize(), pt.n().as_usize())?;
+        let offset = ensure_plaintext_alignment(OP, ct.log_budget(), pt.log_delta(), pt.max_k().as_usize())?;
         let base2k = ct.base2k().as_usize();
         let mut ct_ref = GLWEToBackendMut::to_backend_mut(ct);
-        let pt_ref = GLWEToBackendRef::to_backend_ref(pt_znx);
+        let pt_ref = GLWEToBackendRef::to_backend_ref(pt);
         self.vec_znx_rsh_sub_backend(base2k, offset, ct_ref.data_mut(), 0, pt_ref.data(), 0, scratch);
         Ok(())
     }
 
-    fn ckks_extract_pt_znx_tmp_bytes_default(&self) -> usize
+    fn ckks_extract_pt_tmp_bytes_default(&self) -> usize
     where
         Self: VecZnxLshTmpBytes + VecZnxRshTmpBytes,
     {
         self.vec_znx_rsh_tmp_bytes().max(self.vec_znx_lsh_tmp_bytes())
     }
 
-    fn ckks_extract_pt_znx_default<D, S>(&self, dst: &mut D, src: &S, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    fn ckks_extract_pt_default<D, S>(&self, dst: &mut D, src: &S, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         D: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
         S: GLWEToBackendRef<BE> + GLWEInfos + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
         Self: VecZnxLshBackend<BE> + VecZnxRshBackend<BE>,
     {
-        self.ckks_extract_pt_znx_with_meta_default(dst, src, src.meta(), scratch)
+        self.ckks_extract_pt_with_meta_default(dst, src, src.meta(), scratch)
     }
 
-    fn ckks_extract_pt_znx_with_meta_default<D, S>(
+    fn ckks_extract_pt_with_meta_default<D, S>(
         &self,
         dst: &mut D,
         src: &S,
@@ -159,11 +159,11 @@ pub trait CKKSPlaintextDefault<BE: Backend> {
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
         Self: VecZnxLshBackend<BE> + VecZnxRshBackend<BE>,
     {
-        ensure_base2k_match("ckks_extract_pt_znx", src.base2k().as_usize(), dst.base2k().as_usize())?;
+        ensure_base2k_match("ckks_extract_pt", src.base2k().as_usize(), dst.base2k().as_usize())?;
         let available = src_meta.log_budget() + dst.log_delta();
         if available < dst.effective_k() {
             return Err(crate::CKKSCompositionError::PlaintextAlignmentImpossible {
-                op: "ckks_extract_pt_znx",
+                op: "ckks_extract_pt",
                 ct_log_budget: src_meta.log_budget(),
                 pt_log_delta: dst.log_delta(),
                 pt_k: dst.effective_k(),

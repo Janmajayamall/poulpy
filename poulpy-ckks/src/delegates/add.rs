@@ -57,7 +57,7 @@ where
     }
 
     fn ckks_add_pt_vec_tmp_bytes(&self) -> usize {
-        BE::ckks_add_pt_vec_znx_tmp_bytes(self)
+        BE::ckks_add_pt_vec_tmp_bytes(self)
     }
 
     fn ckks_add_pt_vec_into<Dst, A, P>(&self, dst: &mut Dst, a: &A, pt: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
@@ -66,7 +66,7 @@ where
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        BE::ckks_add_pt_vec_znx_into(self, dst, a, pt, scratch)
+        BE::ckks_add_pt_vec_into(self, dst, a, pt, scratch)
     }
 
     fn ckks_add_pt_vec_assign<Dst, P>(&self, dst: &mut Dst, pt: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
@@ -74,7 +74,7 @@ where
         Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        BE::ckks_add_pt_vec_znx_assign(self, dst, pt, scratch)
+        BE::ckks_add_pt_vec_assign(self, dst, pt, scratch)
     }
 
     fn ckks_add_pt_const_tmp_bytes(&self) -> usize {
@@ -95,7 +95,7 @@ where
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        BE::ckks_add_pt_const_znx_into(self, dst, a, dst_coeff, pt, pt_coeff, scratch)
+        BE::ckks_add_pt_const_into(self, dst, a, dst_coeff, pt, pt_coeff, scratch)
     }
 
     fn ckks_add_pt_const_assign<Dst, P>(
@@ -110,7 +110,7 @@ where
         Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        BE::ckks_add_pt_const_znx_assign(self, dst, dst_coeff, pt, pt_coeff, scratch)
+        BE::ckks_add_pt_const_assign(self, dst, dst_coeff, pt, pt_coeff, scratch)
     }
 }
 

@@ -6,10 +6,10 @@
 //! |----------|----------------|
 //! | [`test_mul_sub_ct_aligned`] | ct-ct, all operands aligned |
 //! | [`test_mul_sub_ct_unaligned_dst`] | ct-ct with `dst` at a lower `log_budget` |
-//! | [`test_mul_sub_pt_vec_znx_aligned`] | ZNX plaintext, aligned |
-//! | [`test_mul_sub_pt_vec_znx_into_delta_log_delta`] | ZNX plaintext at lower `log_delta` |
-//! | [`test_mul_sub_pt_const_znx_into_aligned`] | ZNX constant, aligned |
-//! | [`test_mul_sub_pt_const_znx_zero_preserves_dst_meta`] | ZNX zero constant no-op |
+//! | [`test_mul_sub_pt_vec_aligned`] | ZNX plaintext, aligned |
+//! | [`test_mul_sub_pt_vec_into_delta_log_delta`] | ZNX plaintext at lower `log_delta` |
+//! | [`test_mul_sub_pt_const_into_aligned`] | ZNX constant, aligned |
+//! | [`test_mul_sub_pt_const_zero_preserves_dst_meta`] | ZNX zero constant no-op |
 
 use poulpy_hal::{
     api::{ScratchOwnedAlloc, ScratchOwnedBorrow},
@@ -25,13 +25,11 @@ fn alloc_scratch<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestCont
     let ct_infos = ctx.ct_infos();
     let tsk_infos = ctx.params.tsk_layout();
     let ct_bytes = ctx.module.ckks_mul_sub_ct_tmp_bytes(&ct_infos, &tsk_infos);
-    let pt_znx_bytes = ctx
-        .module
-        .ckks_mul_sub_pt_vec_znx_tmp_bytes(&ct_infos, &ct_infos, &ctx.meta_pt());
+    let pt_bytes = ctx.module.ckks_mul_sub_pt_vec_tmp_bytes(&ct_infos, &ct_infos, &ctx.meta_pt());
     let const_bytes = ctx
         .module
         .ckks_mul_sub_pt_const_tmp_bytes(&ct_infos, &ct_infos, &ctx.meta_pt());
-    let bytes = ct_bytes.max(pt_znx_bytes).max(const_bytes);
+    let bytes = ct_bytes.max(pt_bytes).max(const_bytes);
     ScratchOwned::<BE>::alloc(ctx.scratch_size.max(bytes))
 }
 
@@ -110,7 +108,7 @@ pub fn test_mul_sub_ct_unaligned_dst<BE: Backend, F: TestScalar, E: NegacyclicFF
     ctx.assert_decrypt_precision("mul_sub_ct_unaligned_dst", &dst, &want_re, &want_im, &mut scratch.borrow());
 }
 
-pub fn test_mul_sub_pt_vec_znx_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_mul_sub_pt_vec_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = alloc_scratch(ctx);
     let half = F::from_f64(0.5).unwrap();
     let dst_re = scaled(&ctx.re1, half);
@@ -127,16 +125,14 @@ pub fn test_mul_sub_pt_vec_znx_aligned<BE: Backend, F: TestScalar, E: Negacyclic
 
     let mut dst = ctx.encrypt(ctx.max_k(), &dst_re, &dst_im, &mut scratch.borrow());
     let a = ctx.encrypt(ctx.max_k(), &a_re, &a_im, &mut scratch.borrow());
-    let pt = ctx.encode_pt_znx(&b_re_raw, &b_im_raw);
+    let pt = ctx.encode_pt(&b_re_raw, &b_im_raw);
     ctx.module
-        .ckks_mul_sub_pt_vec_znx_into(&mut dst, &a, &pt, &mut scratch.borrow())
+        .ckks_mul_sub_pt_vec_into(&mut dst, &a, &pt, &mut scratch.borrow())
         .unwrap();
-    ctx.assert_decrypt_precision("mul_sub_pt_vec_znx_aligned", &dst, &want_re, &want_im, &mut scratch.borrow());
+    ctx.assert_decrypt_precision("mul_sub_pt_vec_aligned", &dst, &want_re, &want_im, &mut scratch.borrow());
 }
 
-pub fn test_mul_sub_pt_vec_znx_into_delta_log_delta<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(
-    ctx: &TestContext<BE, F, E>,
-) {
+pub fn test_mul_sub_pt_vec_into_delta_log_delta<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = alloc_scratch(ctx);
     let half = F::from_f64(0.5).unwrap();
     let pt_prec = ctx.meta_pt();
@@ -155,12 +151,12 @@ pub fn test_mul_sub_pt_vec_znx_into_delta_log_delta<BE: Backend, F: TestScalar, 
 
     let mut dst = ctx.encrypt(ctx.max_k(), &dst_re, &dst_im, &mut scratch.borrow());
     let a = ctx.encrypt(ctx.max_k(), &a_re, &a_im, &mut scratch.borrow());
-    let pt = ctx.encode_pt_znx_with_prec(&b_re_raw, &b_im_raw, pt_prec);
+    let pt = ctx.encode_pt_with_prec(&b_re_raw, &b_im_raw, pt_prec);
     ctx.module
-        .ckks_mul_sub_pt_vec_znx_into(&mut dst, &a, &pt, &mut scratch.borrow())
+        .ckks_mul_sub_pt_vec_into(&mut dst, &a, &pt, &mut scratch.borrow())
         .unwrap();
     ctx.assert_decrypt_precision_at_log_delta(
-        "mul_sub_pt_vec_znx_into_delta_log_delta",
+        "mul_sub_pt_vec_into_delta_log_delta",
         &dst,
         &want_re,
         &want_im,
@@ -169,7 +165,7 @@ pub fn test_mul_sub_pt_vec_znx_into_delta_log_delta<BE: Backend, F: TestScalar, 
     );
 }
 
-pub fn test_mul_sub_pt_const_znx_into_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_mul_sub_pt_const_into_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = alloc_scratch(ctx);
     let half = F::from_f64(0.5).unwrap();
     let dst_re = scaled(&ctx.re1, half);
@@ -185,12 +181,12 @@ pub fn test_mul_sub_pt_const_znx_into_aligned<BE: Backend, F: TestScalar, E: Neg
 
     let mut dst = ctx.encrypt(ctx.max_k(), &dst_re, &dst_im, &mut scratch.borrow());
     let a = ctx.encrypt(ctx.max_k(), &a_re, &a_im, &mut scratch.borrow());
-    let cst_znx = ctx.const_full_rnx(Some(c_re_f64), None, ctx.meta_pt());
+    let cst = ctx.const_full(Some(c_re_f64), None, ctx.meta_pt());
     ctx.module
-        .ckks_mul_sub_pt_const_znx_into(&mut dst, &a, &cst_znx, 0, &mut scratch.borrow())
+        .ckks_mul_sub_pt_const_into(&mut dst, &a, &cst, 0, &mut scratch.borrow())
         .unwrap();
     ctx.assert_decrypt_precision(
-        "mul_sub_pt_const_znx_into_aligned",
+        "mul_sub_pt_const_into_aligned",
         &dst,
         &want_re,
         &want_im,
@@ -198,7 +194,7 @@ pub fn test_mul_sub_pt_const_znx_into_aligned<BE: Backend, F: TestScalar, E: Neg
     );
 }
 
-pub fn test_mul_sub_pt_const_znx_zero_preserves_dst_meta<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(
+pub fn test_mul_sub_pt_const_zero_preserves_dst_meta<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(
     ctx: &TestContext<BE, F, E>,
 ) {
     let mut scratch = alloc_scratch(ctx);
@@ -215,11 +211,11 @@ pub fn test_mul_sub_pt_const_znx_zero_preserves_dst_meta<BE: Backend, F: TestSca
         log_delta: 0,
         log_budget: ctx.meta_pt().log_budget,
     };
-    let cst_znx = ctx.const_full_rnx(None, None, zero_prec);
+    let cst = ctx.const_full(None, None, zero_prec);
     ctx.module
-        .ckks_mul_sub_pt_const_znx_into(&mut dst, &a, &cst_znx, 0, &mut scratch.borrow())
+        .ckks_mul_sub_pt_const_into(&mut dst, &a, &cst, 0, &mut scratch.borrow())
         .unwrap();
 
-    assert_ct_meta("mul_sub_pt_const_znx_zero", &dst, dst_meta.log_delta, dst_meta.log_budget);
-    ctx.assert_decrypt_precision("mul_sub_pt_const_znx_zero", &dst, &dst_re, &dst_im, &mut scratch.borrow());
+    assert_ct_meta("mul_sub_pt_const_zero", &dst, dst_meta.log_delta, dst_meta.log_budget);
+    ctx.assert_decrypt_precision("mul_sub_pt_const_zero", &dst, &dst_re, &dst_im, &mut scratch.borrow());
 }

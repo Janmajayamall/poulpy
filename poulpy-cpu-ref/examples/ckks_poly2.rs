@@ -338,7 +338,7 @@ fn encoding(setup: &SetupArtifacts) -> Result<EncodingArtifacts> {
 
     let packed_coeffs = encode_packed_coeffs(&setup.module, &coeffs, BASE2K, PREC_PT)?;
     print_pt_meta("packed coefficients", &packed_coeffs);
-    let mut pt_znx = setup.module.ckks_pt_vec_znx_alloc(BASE2K.into(), PREC_CT);
+    let mut pt_znx = setup.module.ckks_pt_vec_alloc(BASE2K.into(), PREC_CT);
     setup.encoder.encode_reim(&mut pt_znx, &x_re, &x_im)?;
     print_pt_meta("encoded plaintext x", &pt_znx);
     println!("  slot[0] cleartext = {}", format_complex(x_re[0], x_im[0], 6));
@@ -467,7 +467,7 @@ fn evaluation(
 fn decryption(setup: &mut SetupArtifacts, evaluation: &EvaluationArtifacts) -> Result<DecryptionArtifacts> {
     print_phase("decryption");
 
-    let mut pt_znx = setup.module.ckks_pt_vec_znx_alloc_from_infos(&evaluation.poly);
+    let mut pt_znx = setup.module.ckks_pt_vec_alloc_from_infos(&evaluation.poly);
     {
         let mut scratch = setup.scratch.borrow();
         setup

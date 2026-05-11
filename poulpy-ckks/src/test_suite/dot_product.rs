@@ -11,8 +11,8 @@
 //! | [`test_dot_product_ct_unaligned_b`] | ct · ct, one b-side input rescaled |
 //! | [`test_dot_product_ct_delta_log_delta`] | ct · ct fallback with non-uniform `log_delta` |
 //! | [`test_dot_product_ct_smaller_output`] | ct · ct, output narrower than inputs |
-//! | [`test_dot_product_pt_vec_znx_aligned`] | ct · ZNX plaintext |
-//! | [`test_dot_product_const_znx_aligned`] | ct · ZNX constant |
+//! | [`test_dot_product_pt_vec_aligned`] | ct · ZNX plaintext |
+//! | [`test_dot_product_const_aligned`] | ct · ZNX constant |
 
 use poulpy_hal::{
     api::{ScratchOwnedAlloc, ScratchOwnedBorrow},
@@ -31,13 +31,13 @@ fn alloc_scratch<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestCont
     let ct_infos = ctx.ct_infos();
     let tsk_infos = ctx.params.tsk_layout();
     let ct_bytes = ctx.module.ckks_dot_product_ct_tmp_bytes(N, &ct_infos, &tsk_infos);
-    let pt_znx_bytes = ctx
+    let pt_bytes = ctx
         .module
-        .ckks_dot_product_pt_vec_znx_tmp_bytes(&ct_infos, &ct_infos, &ctx.meta_pt());
+        .ckks_dot_product_pt_vec_tmp_bytes(&ct_infos, &ct_infos, &ctx.meta_pt());
     let const_bytes = ctx
         .module
         .ckks_dot_product_pt_const_tmp_bytes(&ct_infos, &ct_infos, &ctx.meta_pt());
-    let bytes = ct_bytes.max(pt_znx_bytes).max(const_bytes);
+    let bytes = ct_bytes.max(pt_bytes).max(const_bytes);
     ScratchOwned::<BE>::alloc(ctx.scratch_size.max(bytes))
 }
 
@@ -308,7 +308,7 @@ pub fn test_dot_product_ct_smaller_output<BE: Backend, F: TestScalar, E: Negacyc
     );
 }
 
-pub fn test_dot_product_pt_vec_znx_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_dot_product_pt_vec_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = alloc_scratch(ctx);
     let a_vecs = three_vectors(ctx);
     let b_vecs = three_vectors(ctx);
@@ -332,16 +332,16 @@ pub fn test_dot_product_pt_vec_znx_aligned<BE: Backend, F: TestScalar, E: Negacy
         .iter()
         .map(|(re, im)| ctx.encrypt(ctx.max_k(), re, im, &mut scratch.borrow()))
         .collect();
-    let pts: Vec<_> = b_vecs.iter().map(|(re, im)| ctx.encode_pt_znx(re, im)).collect();
+    let pts: Vec<_> = b_vecs.iter().map(|(re, im)| ctx.encode_pt(re, im)).collect();
     let a_refs: Vec<&_> = a_cts.iter().collect();
     let pt_refs: Vec<&_> = pts.iter().collect();
 
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     ctx.module
-        .ckks_dot_product_pt_vec_znx(&mut ct_res, &a_refs, &pt_refs, &mut scratch.borrow())
+        .ckks_dot_product_pt_vec(&mut ct_res, &a_refs, &pt_refs, &mut scratch.borrow())
         .unwrap();
     ctx.assert_decrypt_precision(
-        "dot_product_pt_vec_znx_aligned",
+        "dot_product_pt_vec_aligned",
         &ct_res,
         &want_re,
         &want_im,
@@ -349,7 +349,7 @@ pub fn test_dot_product_pt_vec_znx_aligned<BE: Backend, F: TestScalar, E: Negacy
     );
 }
 
-pub fn test_dot_product_const_znx_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
+pub fn test_dot_product_const_aligned<BE: Backend, F: TestScalar, E: NegacyclicFFT<F>>(ctx: &TestContext<BE, F, E>) {
     let mut scratch = alloc_scratch(ctx);
     let a_vecs = three_vectors(ctx);
 
@@ -374,21 +374,21 @@ pub fn test_dot_product_const_znx_aligned<BE: Backend, F: TestScalar, E: Negacyc
         .iter()
         .map(|(re, im)| ctx.encrypt(ctx.max_k(), re, im, &mut scratch.borrow()))
         .collect();
-    let cst_znxs: Vec<CKKSPlaintext<Vec<u8>>> = const_coeffs
+    let consts: Vec<CKKSPlaintext<Vec<u8>>> = const_coeffs
         .iter()
-        .map(|r| ctx.const_full_rnx(Some(*r), None, ctx.meta_pt()))
+        .map(|r| ctx.const_full(Some(*r), None, ctx.meta_pt()))
         .collect();
     let pt_coeffs = vec![0usize; N];
 
     let a_refs: Vec<&_> = a_cts.iter().collect();
-    let cst_refs: Vec<&_> = cst_znxs.iter().collect();
+    let const_refs: Vec<&_> = consts.iter().collect();
 
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     ctx.module
-        .ckks_dot_product_pt_const_znx(&mut ct_res, &a_refs, &cst_refs, &pt_coeffs, &mut scratch.borrow())
+        .ckks_dot_product_pt_const(&mut ct_res, &a_refs, &const_refs, &pt_coeffs, &mut scratch.borrow())
         .unwrap();
     ctx.assert_decrypt_precision(
-        "dot_product_const_znx_aligned",
+        "dot_product_const_aligned",
         &ct_res,
         &want_re,
         &want_im,

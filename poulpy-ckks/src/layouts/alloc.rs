@@ -14,7 +14,7 @@ pub trait CKKSModuleAlloc<BE: Backend>: ModuleCoreAlloc<OwnedBuf = BE::OwnedBuf>
 
     fn ckks_ciphertext_alloc(&self, base2k: Base2K, k: TorusPrecision) -> CKKSCiphertext<BE::OwnedBuf>;
 
-    fn ckks_pt_vec_znx_alloc_from_infos<A>(&self, infos: &A) -> CKKSPlaintext<BE::OwnedBuf>
+    fn ckks_pt_vec_alloc_from_infos<A>(&self, infos: &A) -> CKKSPlaintext<BE::OwnedBuf>
     where
         A: GLWEInfos + CKKSInfos;
 
@@ -28,7 +28,7 @@ pub trait CKKSModuleAlloc<BE: Backend>: ModuleCoreAlloc<OwnedBuf = BE::OwnedBuf>
         self.ckks_plaintext_alloc(coeff_count.into(), base2k, meta)
     }
 
-    fn ckks_pt_vec_znx_alloc(&self, base2k: Base2K, meta: CKKSMeta) -> CKKSPlaintext<BE::OwnedBuf>;
+    fn ckks_pt_vec_alloc(&self, base2k: Base2K, meta: CKKSMeta) -> CKKSPlaintext<BE::OwnedBuf>;
 }
 
 impl<BE: Backend> CKKSModuleAlloc<BE> for Module<BE>
@@ -46,7 +46,7 @@ where
         CKKSCiphertext::from_inner(self.glwe_alloc(base2k, k, Rank(1)), CKKSMeta::default())
     }
 
-    fn ckks_pt_vec_znx_alloc_from_infos<A>(&self, infos: &A) -> CKKSPlaintext<BE::OwnedBuf>
+    fn ckks_pt_vec_alloc_from_infos<A>(&self, infos: &A) -> CKKSPlaintext<BE::OwnedBuf>
     where
         A: GLWEInfos + CKKSInfos,
     {
@@ -71,7 +71,7 @@ where
         )
     }
 
-    fn ckks_pt_vec_znx_alloc(&self, base2k: Base2K, meta: CKKSMeta) -> CKKSPlaintext<BE::OwnedBuf> {
+    fn ckks_pt_vec_alloc(&self, base2k: Base2K, meta: CKKSMeta) -> CKKSPlaintext<BE::OwnedBuf> {
         self.ckks_plaintext_alloc(self.ring_degree(), base2k, meta)
     }
 }

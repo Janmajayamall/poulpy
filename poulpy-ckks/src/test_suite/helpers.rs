@@ -449,7 +449,7 @@ where
             .max(module.ckks_add_pt_const_tmp_bytes())
             .max(module.ckks_copy_tmp_bytes())
             .max(module.ckks_sub_tmp_bytes())
-            .max(module.ckks_sub_pt_vec_znx_tmp_bytes())
+            .max(module.ckks_sub_pt_vec_tmp_bytes())
             .max(module.ckks_sub_pt_const_tmp_bytes())
             .max(module.ckks_neg_tmp_bytes())
             .max(module.ckks_mul_pow2_tmp_bytes())
@@ -460,7 +460,7 @@ where
             .max(module.ckks_align_tmp_bytes())
             .max(module.ckks_mul_tmp_bytes(&ct_infos, &tsk_infos))
             .max(module.ckks_square_tmp_bytes(&ct_infos, &tsk_infos))
-            .max(module.ckks_mul_pt_vec_znx_tmp_bytes(&ct_infos, &ct_infos, &pt_prec))
+            .max(module.ckks_mul_pt_vec_tmp_bytes(&ct_infos, &ct_infos, &pt_prec))
             .max(module.ckks_mul_pt_const_tmp_bytes(&ct_infos, &ct_infos, &pt_prec))
             .max(module.prepare_tensor_key_tmp_bytes(&tsk_infos))
             .max(module.glwe_tensor_key_encrypt_sk_tmp_bytes(&tsk_infos))
@@ -592,7 +592,7 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
         (re, im)
     }
 
-    pub fn add_sub_const_pt(&self) -> (F, F) {
+    pub fn add_sub_const(&self) -> (F, F) {
         let (re, im) = self.sample_add_sub_const();
         self.quantized_const_pt(re, im)
     }
@@ -606,7 +606,7 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
         self.quantized_const(re, im, self.meta_pt().log_delta)
     }
 
-    pub fn const_rnx(&self, re: Option<f64>, im: Option<f64>, prec: CKKSMeta) -> CKKSPlaintext<Vec<u8>> {
+    pub fn cst(&self, re: Option<f64>, im: Option<f64>, prec: CKKSMeta) -> CKKSPlaintext<Vec<u8>> {
         let coeff_count = if im.is_some() { 2 } else { 1 };
         let mut pt = self.host_module.ckks_pt_coeffs_alloc(coeff_count, self.base2k(), prec);
         let mut packed_coeffs = vec![F::zero(); coeff_count];
@@ -620,13 +620,13 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
         pt
     }
 
-    pub fn add_sub_const_rnx_pt(&self) -> CKKSPlaintext<Vec<u8>> {
+    pub fn add_sub_const_pt(&self) -> CKKSPlaintext<Vec<u8>> {
         let (re, im) = self.sample_add_sub_const();
-        self.const_rnx(Some(re), Some(im), self.meta_pt())
+        self.cst(Some(re), Some(im), self.meta_pt())
     }
 
-    pub fn const_full_rnx(&self, re: Option<f64>, im: Option<f64>, prec: CKKSMeta) -> CKKSPlaintext<Vec<u8>> {
-        let mut pt = self.host_module.ckks_pt_vec_znx_alloc(self.base2k(), prec);
+    pub fn const_full(&self, re: Option<f64>, im: Option<f64>, prec: CKKSMeta) -> CKKSPlaintext<Vec<u8>> {
+        let mut pt = self.host_module.ckks_pt_vec_alloc(self.base2k(), prec);
         let mut coeffs = vec![F::zero(); self.degree().as_usize()];
         if let Some(re) = re {
             coeffs[0] = Self::to_scalar(re);
@@ -638,9 +638,9 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
         pt
     }
 
-    pub fn mul_const_full_rnx_pt(&self) -> CKKSPlaintext<Vec<u8>> {
+    pub fn mul_const_full_pt(&self) -> CKKSPlaintext<Vec<u8>> {
         let (re, im) = self.sample_mul_const();
-        self.const_full_rnx(Some(re), Some(im), self.meta_pt())
+        self.const_full(Some(re), Some(im), self.meta_pt())
     }
 
     pub fn tsk(&self) -> &GLWETensorKeyPrepared<BE::OwnedBuf, BE> {
@@ -680,8 +680,8 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
         ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
         BE: 'a,
     {
-        let mut pt_znx = self.host_module.ckks_pt_vec_znx_alloc(self.base2k(), prec);
-        self.encoder.encode_reim(&mut pt_znx, re, im).unwrap();
+        let mut pt = self.host_module.ckks_pt_vec_alloc(self.base2k(), prec);
+        self.encoder.encode_reim(&mut pt, re, im).unwrap();
 
         let mut ct = self.alloc_ct(k);
         let mut xa = Source::new([3u8; 32]);
@@ -692,7 +692,7 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
         let enc_infos = EncryptionLayout::new_from_default_sigma(layout).unwrap();
 
         self.module
-            .ckks_encrypt_sk(&mut ct, &pt_znx, &self.sk, &enc_infos, &mut xa, &mut xe, scratch)
+            .ckks_encrypt_sk(&mut ct, &pt, &self.sk, &enc_infos, &mut xa, &mut xe, scratch)
             .unwrap();
         ct
     }
@@ -707,9 +707,9 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
             log_delta: ct.log_delta(),
             log_budget: ct.log_budget().min(self.params.prec.log_budget()),
         };
-        let pt_znx = self.decrypt_with_prec(ct, prec, scratch).unwrap();
+        let pt = self.decrypt_with_prec(ct, prec, scratch).unwrap();
 
-        self.decode_pt_znx(&pt_znx)
+        self.decode_pt(&pt)
     }
 
     /// Decrypts `ct` into a plaintext buffer allocated with the caller-provided
@@ -740,15 +740,15 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
         Module<BE>: CKKSDecrypt<BE>,
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
     {
-        let mut pt_znx = self.host_module.ckks_pt_vec_znx_alloc(ct.base2k(), prec);
-        self.module.ckks_decrypt(&mut pt_znx, ct, &self.sk, scratch)?;
-        Ok(pt_znx)
+        let mut pt = self.host_module.ckks_pt_vec_alloc(ct.base2k(), prec);
+        self.module.ckks_decrypt(&mut pt, ct, &self.sk, scratch)?;
+        Ok(pt)
     }
 
     /// Decodes a CKKS ZNX plaintext into complex slot vectors.
     ///
     /// Inputs:
-    /// - `pt_znx`: plaintext in torus/ZNX form
+    /// - `pt`: plaintext in torus/ZNX form
     ///
     /// Output:
     /// - `(re, im)` slot vectors decoded through the current test encoder
@@ -760,11 +760,11 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
     /// Errors:
     /// - this helper unwraps internal conversion/decoder results and therefore
     ///   panics instead of returning an error in tests
-    pub fn decode_pt_znx(&self, pt_znx: &CKKSPlaintext<Vec<u8>>) -> (Vec<F>, Vec<F>) {
+    pub fn decode_pt(&self, pt: &CKKSPlaintext<Vec<u8>>) -> (Vec<F>, Vec<F>) {
         let m = self.params.n / 2;
         let mut re = vec![F::zero(); m];
         let mut im = vec![F::zero(); m];
-        self.encoder.decode_reim(pt_znx, &mut re, &mut im).unwrap();
+        self.encoder.decode_reim(pt, &mut re, &mut im).unwrap();
 
         (re, im)
     }
@@ -929,22 +929,22 @@ impl<BE: TestBackend, F: TestScalar, E: NegacyclicFFT<F>> TestContext<BE, F, E> 
     }
 
     /// Encodes (re2, im2) into a ZNX plaintext (IFFT + quantise).
-    pub fn encode_pt_znx(&self, re: &[F], im: &[F]) -> CKKSPlaintext<Vec<u8>> {
-        self.encode_pt_znx_with_prec(re, im, self.meta_pt())
+    pub fn encode_pt(&self, re: &[F], im: &[F]) -> CKKSPlaintext<Vec<u8>> {
+        self.encode_pt_with_prec(re, im, self.meta_pt())
     }
 
-    pub fn encode_pt_znx_with_prec(&self, re: &[F], im: &[F], prec: CKKSMeta) -> CKKSPlaintext<Vec<u8>> {
-        let mut pt_znx = self.host_module.ckks_pt_vec_znx_alloc(self.base2k(), prec);
-        self.encoder.encode_reim(&mut pt_znx, re, im).unwrap();
-        pt_znx
+    pub fn encode_pt_with_prec(&self, re: &[F], im: &[F], prec: CKKSMeta) -> CKKSPlaintext<Vec<u8>> {
+        let mut pt = self.host_module.ckks_pt_vec_alloc(self.base2k(), prec);
+        self.encoder.encode_reim(&mut pt, re, im).unwrap();
+        pt
     }
 
     pub fn quantized_slots(&self, re: &[F], im: &[F], prec: CKKSMeta) -> (Vec<F>, Vec<F>) {
-        let pt_znx = self.encode_pt_znx_with_prec(re, im, prec);
+        let pt = self.encode_pt_with_prec(re, im, prec);
         let m = self.params.n / 2;
         let mut re_out = vec![F::zero(); m];
         let mut im_out = vec![F::zero(); m];
-        self.encoder.decode_reim(&pt_znx, &mut re_out, &mut im_out).unwrap();
+        self.encoder.decode_reim(&pt, &mut re_out, &mut im_out).unwrap();
         (re_out, im_out)
     }
 

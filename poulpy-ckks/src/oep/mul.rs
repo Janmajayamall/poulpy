@@ -20,7 +20,7 @@ use crate::{CKKSInfos, CKKSMeta, GLWEToBackendMut, GLWEToBackendRef, SetCKKSInfo
 pub unsafe trait CKKSMulImpl<BE: Backend>: Backend {
     fn ckks_mul_tmp_bytes<R: GLWEInfos, T: GGLWEInfos>(module: &Module<BE>, res: &R, tsk: &T) -> usize;
     fn ckks_square_tmp_bytes<R: GLWEInfos, T: GGLWEInfos>(module: &Module<BE>, res: &R, tsk: &T) -> usize;
-    fn ckks_mul_pt_vec_znx_tmp_bytes<R: GLWEInfos, A: GLWEInfos>(module: &Module<BE>, res: &R, a: &A, b: &CKKSMeta) -> usize;
+    fn ckks_mul_pt_vec_tmp_bytes<R: GLWEInfos, A: GLWEInfos>(module: &Module<BE>, res: &R, a: &A, b: &CKKSMeta) -> usize;
     fn ckks_mul_pt_const_tmp_bytes<R: GLWEInfos, A: GLWEInfos>(module: &Module<BE>, res: &R, a: &A, b: &CKKSMeta) -> usize;
     fn ckks_mul_into<Dst, A, B, T>(
         module: &Module<BE>,
@@ -61,31 +61,31 @@ pub unsafe trait CKKSMulImpl<BE: Backend>: Backend {
     where
         Dst: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSInfos + SetCKKSInfos + GLWEInfos,
         T: GLWETensorKeyPreparedToBackendRef<BE> + GGLWEInfos;
-    fn ckks_mul_pt_vec_znx_into<Dst, A, P>(
+    fn ckks_mul_pt_vec_into<Dst, A, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + CKKSInfos + SetCKKSInfos + GLWEInfos,
         A: GLWEToBackendRef<BE> + CKKSInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos + CKKSInfos;
-    fn ckks_mul_pt_vec_znx_assign<Dst, P>(
+    fn ckks_mul_pt_vec_assign<Dst, P>(
         module: &Module<BE>,
         dst: &mut Dst,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + CKKSInfos + SetCKKSInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos + CKKSInfos;
-    fn ckks_mul_pt_const_znx_into<Dst, A, P>(
+    fn ckks_mul_pt_const_into<Dst, A, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -93,10 +93,10 @@ pub unsafe trait CKKSMulImpl<BE: Backend>: Backend {
         Dst: GLWEToBackendMut<BE> + CKKSInfos + SetCKKSInfos + GLWEInfos,
         A: GLWEToBackendRef<BE> + CKKSInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos + CKKSInfos;
-    fn ckks_mul_pt_const_znx_assign<Dst, P>(
+    fn ckks_mul_pt_const_assign<Dst, P>(
         module: &Module<BE>,
         dst: &mut Dst,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -128,8 +128,8 @@ where
         module.ckks_square_tmp_bytes_default(res, tsk)
     }
 
-    fn ckks_mul_pt_vec_znx_tmp_bytes<R: GLWEInfos, A: GLWEInfos>(module: &Module<BE>, res: &R, a: &A, b: &CKKSMeta) -> usize {
-        module.ckks_mul_pt_vec_znx_tmp_bytes_default(res, a, b)
+    fn ckks_mul_pt_vec_tmp_bytes<R: GLWEInfos, A: GLWEInfos>(module: &Module<BE>, res: &R, a: &A, b: &CKKSMeta) -> usize {
+        module.ckks_mul_pt_vec_tmp_bytes_default(res, a, b)
     }
 
     fn ckks_mul_pt_const_tmp_bytes<R: GLWEInfos, A: GLWEInfos>(module: &Module<BE>, res: &R, a: &A, b: &CKKSMeta) -> usize {
@@ -191,11 +191,11 @@ where
         module.ckks_square_assign_default(dst, tsk, scratch)
     }
 
-    fn ckks_mul_pt_vec_znx_into<Dst, A, P>(
+    fn ckks_mul_pt_vec_into<Dst, A, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -203,27 +203,27 @@ where
         A: GLWEToBackendRef<BE> + CKKSInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos + CKKSInfos,
     {
-        module.ckks_mul_pt_vec_znx_into_default(dst, a, pt_znx, scratch)
+        module.ckks_mul_pt_vec_into_default(dst, a, pt, scratch)
     }
 
-    fn ckks_mul_pt_vec_znx_assign<Dst, P>(
+    fn ckks_mul_pt_vec_assign<Dst, P>(
         module: &Module<BE>,
         dst: &mut Dst,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + CKKSInfos + SetCKKSInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos + CKKSInfos,
     {
-        module.ckks_mul_pt_vec_znx_assign_default(dst, pt_znx, scratch)
+        module.ckks_mul_pt_vec_assign_default(dst, pt, scratch)
     }
 
-    fn ckks_mul_pt_const_znx_into<Dst, A, P>(
+    fn ckks_mul_pt_const_into<Dst, A, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -232,13 +232,13 @@ where
         A: GLWEToBackendRef<BE> + CKKSInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos + CKKSInfos,
     {
-        module.ckks_mul_pt_const_znx_into_default(dst, a, pt_znx, pt_coeff, scratch)
+        module.ckks_mul_pt_const_into_default(dst, a, pt, pt_coeff, scratch)
     }
 
-    fn ckks_mul_pt_const_znx_assign<Dst, P>(
+    fn ckks_mul_pt_const_assign<Dst, P>(
         module: &Module<BE>,
         dst: &mut Dst,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -246,7 +246,7 @@ where
         Dst: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSInfos + SetCKKSInfos + GLWEInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + GLWEInfos + CKKSInfos,
     {
-        module.ckks_mul_pt_const_znx_assign_default(dst, pt_znx, pt_coeff, scratch)
+        module.ckks_mul_pt_const_assign_default(dst, pt, pt_coeff, scratch)
     }
 }
 

@@ -168,13 +168,13 @@ where
         GLWE::<Vec<u8>>::bytes_of_from_infos(res) + self.ckks_mul_tmp_bytes(res, tsk).max(self.ckks_add_tmp_bytes())
     }
 
-    fn ckks_mul_add_pt_vec_znx_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
+    fn ckks_mul_add_pt_vec_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
     where
         R: CKKSCtBounds,
         A: CKKSCtBounds,
         P: CKKSInfos,
     {
-        GLWE::<Vec<u8>>::bytes_of_from_infos(res) + self.ckks_mul_pt_vec_znx_tmp_bytes(res, a, b).max(self.ckks_add_tmp_bytes())
+        GLWE::<Vec<u8>>::bytes_of_from_infos(res) + self.ckks_mul_pt_vec_tmp_bytes(res, a, b).max(self.ckks_add_tmp_bytes())
     }
 
     fn ckks_mul_add_pt_const_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
@@ -207,11 +207,11 @@ where
         })
     }
 
-    fn ckks_mul_add_pt_vec_znx_into<Dst: Data, A: Data, P>(
+    fn ckks_mul_add_pt_vec_into<Dst: Data, A: Data, P>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &CKKSCiphertext<A>,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -221,16 +221,16 @@ where
     {
         scratch.scope(|scratch_local| {
             let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
-            self.ckks_mul_pt_vec_znx_into(&mut tmp, a, pt_znx, &mut scratch_local)?;
+            self.ckks_mul_pt_vec_into(&mut tmp, a, pt, &mut scratch_local)?;
             self.ckks_add_assign(dst, &tmp, &mut scratch_local)
         })
     }
 
-    fn ckks_mul_add_pt_const_znx_into<Dst: Data, A: Data, P>(
+    fn ckks_mul_add_pt_const_into<Dst: Data, A: Data, P>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &CKKSCiphertext<A>,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -241,16 +241,16 @@ where
     {
         scratch.scope(|scratch_local| {
             let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
-            self.ckks_mul_pt_const_znx_into(&mut tmp, a, pt_znx, pt_coeff, &mut scratch_local)?;
+            self.ckks_mul_pt_const_into(&mut tmp, a, pt, pt_coeff, &mut scratch_local)?;
             self.ckks_add_assign(dst, &tmp, &mut scratch_local)
         })
     }
 
-    fn ckks_mul_add_pt_const_znx_into_unnormalized<Dst: Data, A, P>(
+    fn ckks_mul_add_pt_const_into_unnormalized<Dst: Data, A, P>(
         &self,
         dst: &mut UnnormalizedCKKSCiphertext<Dst>,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -261,16 +261,16 @@ where
     {
         scratch.scope(|scratch_local| {
             let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(&dst.inner);
-            self.ckks_mul_pt_const_znx_into(&mut tmp, a, pt_znx, pt_coeff, &mut scratch_local)?;
+            self.ckks_mul_pt_const_into(&mut tmp, a, pt, pt_coeff, &mut scratch_local)?;
             self.ckks_add_assign_unnormalized(dst, &tmp, &mut scratch_local)
         })
     }
 
-    fn ckks_mul_add_pt_vec_znx_into_unnormalized<Dst: Data, A, P>(
+    fn ckks_mul_add_pt_vec_into_unnormalized<Dst: Data, A, P>(
         &self,
         dst: &mut UnnormalizedCKKSCiphertext<Dst>,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -280,7 +280,7 @@ where
     {
         scratch.scope(|scratch_local| {
             let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(&dst.inner);
-            self.ckks_mul_pt_vec_znx_into(&mut tmp, a, pt_znx, &mut scratch_local)?;
+            self.ckks_mul_pt_vec_into(&mut tmp, a, pt, &mut scratch_local)?;
             self.ckks_add_assign_unnormalized(dst, &tmp, &mut scratch_local)
         })
     }
@@ -317,7 +317,7 @@ where
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        self.ckks_mul_pt_const_znx_into(dst, a, affine_const, scale_coeff, scratch)?;
+        self.ckks_mul_pt_const_into(dst, a, affine_const, scale_coeff, scratch)?;
         self.ckks_add_pt_const_assign(dst, 0, affine_const, offset_coeff, scratch)
     }
 
@@ -333,7 +333,7 @@ where
         Dst: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSCtBounds + crate::SetCKKSInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        self.ckks_mul_pt_const_znx_assign(dst, affine_const, scale_coeff, scratch)?;
+        self.ckks_mul_pt_const_assign(dst, affine_const, scale_coeff, scratch)?;
         self.ckks_add_pt_const_assign(dst, 0, affine_const, offset_coeff, scratch)
     }
 
@@ -343,7 +343,7 @@ where
         A: CKKSCtBounds,
         S: CKKSInfos,
     {
-        self.ckks_mul_pt_vec_znx_tmp_bytes(res, a, scale)
+        self.ckks_mul_pt_vec_tmp_bytes(res, a, scale)
             .max(self.ckks_add_pt_vec_tmp_bytes())
     }
 
@@ -361,7 +361,7 @@ where
         S: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        self.ckks_mul_pt_vec_znx_into(dst, a, scale, scratch)?;
+        self.ckks_mul_pt_vec_into(dst, a, scale, scratch)?;
         self.ckks_add_pt_vec_assign(dst, offset, scratch)
     }
 
@@ -377,7 +377,7 @@ where
         S: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        self.ckks_mul_pt_vec_znx_assign(dst, scale, scratch)?;
+        self.ckks_mul_pt_vec_assign(dst, scale, scratch)?;
         self.ckks_add_pt_vec_assign(dst, offset, scratch)
     }
 }
@@ -397,13 +397,13 @@ where
         GLWE::<Vec<u8>>::bytes_of_from_infos(res) + self.ckks_mul_tmp_bytes(res, tsk).max(self.ckks_sub_tmp_bytes())
     }
 
-    fn ckks_mul_sub_pt_vec_znx_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
+    fn ckks_mul_sub_pt_vec_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
     where
         R: CKKSCtBounds,
         A: CKKSCtBounds,
         P: CKKSInfos,
     {
-        GLWE::<Vec<u8>>::bytes_of_from_infos(res) + self.ckks_mul_pt_vec_znx_tmp_bytes(res, a, b).max(self.ckks_sub_tmp_bytes())
+        GLWE::<Vec<u8>>::bytes_of_from_infos(res) + self.ckks_mul_pt_vec_tmp_bytes(res, a, b).max(self.ckks_sub_tmp_bytes())
     }
 
     fn ckks_mul_sub_pt_const_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
@@ -436,11 +436,11 @@ where
         })
     }
 
-    fn ckks_mul_sub_pt_vec_znx_into<Dst: Data, A: Data, P>(
+    fn ckks_mul_sub_pt_vec_into<Dst: Data, A: Data, P>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &CKKSCiphertext<A>,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -450,16 +450,16 @@ where
     {
         scratch.scope(|scratch_local| {
             let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
-            self.ckks_mul_pt_vec_znx_into(&mut tmp, a, pt_znx, &mut scratch_local)?;
+            self.ckks_mul_pt_vec_into(&mut tmp, a, pt, &mut scratch_local)?;
             self.ckks_sub_assign(dst, &tmp, &mut scratch_local)
         })
     }
 
-    fn ckks_mul_sub_pt_const_znx_into<Dst: Data, A: Data, P>(
+    fn ckks_mul_sub_pt_const_into<Dst: Data, A: Data, P>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &CKKSCiphertext<A>,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -470,7 +470,7 @@ where
     {
         scratch.scope(|scratch_local| {
             let (mut tmp, mut scratch_local) = scratch_local.take_ckks_ciphertext_like_scratch(dst);
-            self.ckks_mul_pt_const_znx_into(&mut tmp, a, pt_znx, pt_coeff, &mut scratch_local)?;
+            self.ckks_mul_pt_const_into(&mut tmp, a, pt, pt_coeff, &mut scratch_local)?;
             self.ckks_sub_assign(dst, &tmp, &mut scratch_local)
         })
     }
@@ -556,13 +556,13 @@ where
         fallback.max(fast)
     }
 
-    fn ckks_dot_product_pt_vec_znx_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
+    fn ckks_dot_product_pt_vec_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
     where
         R: CKKSCtBounds,
         A: CKKSCtBounds,
         P: CKKSInfos,
     {
-        GLWE::<Vec<u8>>::bytes_of_from_infos(res) + self.ckks_mul_pt_vec_znx_tmp_bytes(res, a, b).max(self.ckks_add_tmp_bytes())
+        GLWE::<Vec<u8>>::bytes_of_from_infos(res) + self.ckks_mul_pt_vec_tmp_bytes(res, a, b).max(self.ckks_add_tmp_bytes())
     }
 
     fn ckks_dot_product_pt_const_tmp_bytes<R, A, P>(&self, res: &R, a: &A, b: &P) -> usize
@@ -595,7 +595,7 @@ where
         accumulate_unnormalized(self, dst, n, scratch, |tmp, i, s| self.ckks_mul_into(tmp, a[i], b[i], tsk, s))
     }
 
-    fn ckks_dot_product_pt_vec_znx<Dst: Data, D: Data, E>(
+    fn ckks_dot_product_pt_vec<Dst: Data, D: Data, E>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &[&CKKSCiphertext<D>],
@@ -607,16 +607,16 @@ where
         CKKSCiphertext<D>: GLWEToBackendRef<BE> + GLWEInfos,
         E: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        check_lengths("ckks_dot_product_pt_vec_znx", a.len(), b.len())?;
+        check_lengths("ckks_dot_product_pt_vec", a.len(), b.len())?;
         let n: usize = a.len();
-        ensure_accumulation_fits("ckks_dot_product_pt_vec_znx", dst, n)?;
-        self.ckks_mul_pt_vec_znx_into(dst, a[0], b[0], scratch)?;
+        ensure_accumulation_fits("ckks_dot_product_pt_vec", dst, n)?;
+        self.ckks_mul_pt_vec_into(dst, a[0], b[0], scratch)?;
         accumulate_unnormalized(self, dst, n, scratch, |tmp, i, s| {
-            self.ckks_mul_pt_vec_znx_into(tmp, a[i], b[i], s)
+            self.ckks_mul_pt_vec_into(tmp, a[i], b[i], s)
         })
     }
 
-    fn ckks_dot_product_pt_const_znx<Dst: Data, D: Data, E>(
+    fn ckks_dot_product_pt_const<Dst: Data, D: Data, E>(
         &self,
         dst: &mut CKKSCiphertext<Dst>,
         a: &[&CKKSCiphertext<D>],
@@ -629,13 +629,13 @@ where
         CKKSCiphertext<D>: GLWEToBackendRef<BE> + GLWEInfos,
         E: GLWEToBackendRef<BE> + CKKSCtBounds,
     {
-        check_lengths("ckks_dot_product_pt_const_znx", a.len(), b.len())?;
-        check_lengths("ckks_dot_product_pt_const_znx coeffs", a.len(), pt_coeffs.len())?;
+        check_lengths("ckks_dot_product_pt_const", a.len(), b.len())?;
+        check_lengths("ckks_dot_product_pt_const coeffs", a.len(), pt_coeffs.len())?;
         let n: usize = a.len();
-        ensure_accumulation_fits("ckks_dot_product_pt_const_znx", dst, n)?;
-        self.ckks_mul_pt_const_znx_into(dst, a[0], b[0], pt_coeffs[0], scratch)?;
+        ensure_accumulation_fits("ckks_dot_product_pt_const", dst, n)?;
+        self.ckks_mul_pt_const_into(dst, a[0], b[0], pt_coeffs[0], scratch)?;
         accumulate_unnormalized(self, dst, n, scratch, |tmp, i, s| {
-            self.ckks_mul_pt_const_znx_into(tmp, a[i], b[i], pt_coeffs[i], s)
+            self.ckks_mul_pt_const_into(tmp, a[i], b[i], pt_coeffs[i], s)
         })
     }
 }

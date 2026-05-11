@@ -24,7 +24,7 @@ use crate::{
 ///
 /// For `_assign` variants `offset = 0`.
 ///
-/// ## Ciphertext–plaintext-vector subtraction (`ckks_sub_pt_vec_znx_*`)
+/// ## Ciphertext–plaintext-vector subtraction (`ckks_sub_pt_vec_*`)
 ///
 /// ```text
 /// offset         = max(0, a.effective_k() − dst.max_k())
@@ -36,12 +36,12 @@ use crate::{
 /// **Precondition**: `a.log_budget + pt.log_delta >= pt.effective_k()`.
 /// Returns `PlaintextAlignmentImpossible` otherwise.
 ///
-/// ## Ciphertext–plaintext-constant subtraction (`ckks_sub_pt_const_znx_*`)
+/// ## Ciphertext–plaintext-constant subtraction (`ckks_sub_pt_const_*`)
 ///
 /// Metadata follows the same rule as the `pt_vec` variants above.
 pub trait CKKSSubOps<BE: Backend + CKKSSubImpl<BE>> {
     fn ckks_sub_tmp_bytes(&self) -> usize;
-    fn ckks_sub_pt_vec_znx_tmp_bytes(&self) -> usize;
+    fn ckks_sub_pt_vec_tmp_bytes(&self) -> usize;
 
     /// Computes `dst = a - b`.
     ///
@@ -66,42 +66,36 @@ pub trait CKKSSubOps<BE: Backend + CKKSSubImpl<BE>> {
     where
         Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos;
 
-    /// Computes `dst = a - pt_znx` where `pt_znx` is a full plaintext polynomial.
-    fn ckks_sub_pt_vec_znx_into<Dst, A, P>(
-        &self,
-        dst: &mut Dst,
-        a: &A,
-        pt_znx: &P,
-        scratch: &mut ScratchArena<'_, BE>,
-    ) -> Result<()>
+    /// Computes `dst = a - pt` where `pt` is a full plaintext polynomial.
+    fn ckks_sub_pt_vec_into<Dst, A, P>(&self, dst: &mut Dst, a: &A, pt: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst -= pt_znx` in-place.
-    fn ckks_sub_pt_vec_znx_assign<Dst, P>(&self, dst: &mut Dst, pt_znx: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
+    /// Computes `dst -= pt` in-place.
+    fn ckks_sub_pt_vec_assign<Dst, P>(&self, dst: &mut Dst, pt: &P, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + CKKSCtBounds + SetCKKSInfos,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
     fn ckks_sub_pt_const_tmp_bytes(&self) -> usize;
 
-    /// Computes `dst = a - pt_znx[pt_coeff]`, subtracting one quantized constant
+    /// Computes `dst = a - pt[pt_coeff]`, subtracting one quantized constant
     /// from a single coefficient slot of the ciphertext.
     ///
     /// - `dst_coeff`: target ZNX coefficient of `dst`.  Use `0` for the
     ///   real-slot constant term and `n/2` for the imaginary-slot constant term.
-    /// - `pt_coeff`: source coefficient index in `pt_znx`.
+    /// - `pt_coeff`: source coefficient index in `pt`.
     ///
     /// See [`CKKSAddOps::ckks_add_pt_const_into`](crate::api::CKKSAddOps::ckks_add_pt_const_into)
     /// for further semantics.
-    fn ckks_sub_pt_const_znx_into<Dst, A, P>(
+    fn ckks_sub_pt_const_into<Dst, A, P>(
         &self,
         dst: &mut Dst,
         a: &A,
         dst_coeff: usize,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -110,15 +104,15 @@ pub trait CKKSSubOps<BE: Backend + CKKSSubImpl<BE>> {
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    /// Computes `dst -= pt_znx[pt_coeff]` in-place.
+    /// Computes `dst -= pt[pt_coeff]` in-place.
     ///
-    /// See [`Self::ckks_sub_pt_const_znx_into`] for the semantics of
+    /// See [`Self::ckks_sub_pt_const_into`] for the semantics of
     /// `dst_coeff` and `pt_coeff`.
-    fn ckks_sub_pt_const_znx_assign<Dst, P>(
+    fn ckks_sub_pt_const_assign<Dst, P>(
         &self,
         dst: &mut Dst,
         dst_coeff: usize,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -158,11 +152,11 @@ pub trait CKKSSubOpsUnnormalized<BE: Backend> {
         CKKSCiphertext<Dst>: GLWEToBackendMut<BE>,
         A: GLWEToBackendRef<BE> + CKKSInfos;
 
-    fn ckks_sub_pt_vec_znx_into_unnormalized<Dst, A, P>(
+    fn ckks_sub_pt_vec_into_unnormalized<Dst, A, P>(
         &self,
         dst: &mut UnnormalizedCKKSCiphertext<Dst>,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -171,10 +165,10 @@ pub trait CKKSSubOpsUnnormalized<BE: Backend> {
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    fn ckks_sub_pt_vec_znx_assign_unnormalized<Dst, P>(
+    fn ckks_sub_pt_vec_assign_unnormalized<Dst, P>(
         &self,
         dst: &mut UnnormalizedCKKSCiphertext<Dst>,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -182,12 +176,12 @@ pub trait CKKSSubOpsUnnormalized<BE: Backend> {
         CKKSCiphertext<Dst>: GLWEToBackendMut<BE>,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    fn ckks_sub_pt_const_znx_into_unnormalized<Dst, A, P>(
+    fn ckks_sub_pt_const_into_unnormalized<Dst, A, P>(
         &self,
         dst: &mut UnnormalizedCKKSCiphertext<Dst>,
         a: &A,
         dst_coeff: usize,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -197,11 +191,11 @@ pub trait CKKSSubOpsUnnormalized<BE: Backend> {
         A: GLWEToBackendRef<BE> + CKKSCtBounds,
         P: GLWEToBackendRef<BE> + CKKSCtBounds;
 
-    fn ckks_sub_pt_const_znx_assign_unnormalized<Dst, P>(
+    fn ckks_sub_pt_const_assign_unnormalized<Dst, P>(
         &self,
         dst: &mut UnnormalizedCKKSCiphertext<Dst>,
         dst_coeff: usize,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>

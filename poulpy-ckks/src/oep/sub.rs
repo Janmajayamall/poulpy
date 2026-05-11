@@ -34,34 +34,34 @@ pub unsafe trait CKKSSubImpl<BE: Backend>: Backend {
     fn ckks_sub_one_assign<Dst>(module: &Module<BE>, dst: &mut Dst, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos;
-    fn ckks_sub_pt_vec_znx_tmp_bytes(module: &Module<BE>) -> usize;
-    fn ckks_sub_pt_vec_znx_into<Dst, A, P>(
+    fn ckks_sub_pt_vec_tmp_bytes(module: &Module<BE>) -> usize;
+    fn ckks_sub_pt_vec_into<Dst, A, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
         A: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos;
-    fn ckks_sub_pt_vec_znx_assign<Dst, P>(
+    fn ckks_sub_pt_vec_assign<Dst, P>(
         module: &Module<BE>,
         dst: &mut Dst,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos;
     fn ckks_sub_pt_const_tmp_bytes(module: &Module<BE>) -> usize;
-    fn ckks_sub_pt_const_znx_into<Dst, A, P>(
+    fn ckks_sub_pt_const_into<Dst, A, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         a: &A,
         dst_coeff: usize,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -69,11 +69,11 @@ pub unsafe trait CKKSSubImpl<BE: Backend>: Backend {
         Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
         A: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos;
-    fn ckks_sub_pt_const_znx_assign<Dst, P>(
+    fn ckks_sub_pt_const_assign<Dst, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         dst_coeff: usize,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -129,15 +129,15 @@ where
         module.ckks_sub_one_assign_default(dst, scratch)
     }
 
-    fn ckks_sub_pt_vec_znx_tmp_bytes(module: &Module<BE>) -> usize {
-        module.ckks_sub_pt_vec_znx_tmp_bytes_default()
+    fn ckks_sub_pt_vec_tmp_bytes(module: &Module<BE>) -> usize {
+        module.ckks_sub_pt_vec_tmp_bytes_default()
     }
 
-    fn ckks_sub_pt_vec_znx_into<Dst, A, P>(
+    fn ckks_sub_pt_vec_into<Dst, A, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         a: &A,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
@@ -145,32 +145,32 @@ where
         A: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
     {
-        crate::default::sub::CKKSSubDefault::ckks_sub_pt_vec_znx_into_default(module, dst, a, pt_znx, scratch)
+        crate::default::sub::CKKSSubDefault::ckks_sub_pt_vec_into_default(module, dst, a, pt, scratch)
     }
 
-    fn ckks_sub_pt_vec_znx_assign<Dst, P>(
+    fn ckks_sub_pt_vec_assign<Dst, P>(
         module: &Module<BE>,
         dst: &mut Dst,
-        pt_znx: &P,
+        pt: &P,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
     where
         Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
     {
-        module.ckks_sub_pt_vec_znx_assign_default(dst, pt_znx, scratch)
+        module.ckks_sub_pt_vec_assign_default(dst, pt, scratch)
     }
 
     fn ckks_sub_pt_const_tmp_bytes(module: &Module<BE>) -> usize {
         module.ckks_sub_pt_const_tmp_bytes_default()
     }
 
-    fn ckks_sub_pt_const_znx_into<Dst, A, P>(
+    fn ckks_sub_pt_const_into<Dst, A, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         a: &A,
         dst_coeff: usize,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -179,14 +179,14 @@ where
         A: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
     {
-        module.ckks_sub_pt_const_znx_into_default(dst, a, dst_coeff, pt_znx, pt_coeff, scratch)
+        module.ckks_sub_pt_const_into_default(dst, a, dst_coeff, pt, pt_coeff, scratch)
     }
 
-    fn ckks_sub_pt_const_znx_assign<Dst, P>(
+    fn ckks_sub_pt_const_assign<Dst, P>(
         module: &Module<BE>,
         dst: &mut Dst,
         dst_coeff: usize,
-        pt_znx: &P,
+        pt: &P,
         pt_coeff: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) -> Result<()>
@@ -194,6 +194,6 @@ where
         Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
     {
-        module.ckks_sub_pt_const_znx_assign_default(dst, dst_coeff, pt_znx, pt_coeff, scratch)
+        module.ckks_sub_pt_const_assign_default(dst, dst_coeff, pt, pt_coeff, scratch)
     }
 }

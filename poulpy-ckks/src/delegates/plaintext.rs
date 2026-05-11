@@ -21,7 +21,7 @@ where
     for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
 {
     fn ckks_extract_pt_tmp_bytes(&self) -> usize {
-        BE::ckks_extract_pt_znx_tmp_bytes(self)
+        BE::ckks_extract_pt_tmp_bytes(self)
     }
 
     fn ckks_extract_pt<D, S>(&self, dst: &mut D, src: &S, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
@@ -29,6 +29,6 @@ where
         D: GLWEToBackendMut<BE> + GLWEInfos + CKKSInfos + SetCKKSInfos + LWEInfos,
         S: GLWEToBackendRef<BE> + GLWEInfos + LWEInfos + CKKSInfos,
     {
-        BE::ckks_extract_pt_znx(self, dst, src, scratch)
+        BE::ckks_extract_pt(self, dst, src, scratch)
     }
 }

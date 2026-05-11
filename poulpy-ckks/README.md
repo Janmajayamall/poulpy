@@ -169,7 +169,7 @@ let im = vec![1.0f64; m];
 let encoder = Encoder::<FFT64ReimTable<f64>>::new::<f64>(m)?;
 
 // allocate a plaintext via the module, then encode
-let mut pt = module.ckks_pt_vec_znx_alloc(base2k.into(), prec);
+let mut pt = module.ckks_pt_vec_alloc(base2k.into(), prec);
 encoder.encode_reim(&mut pt, &re, &im)?;
 
 let mut re_out = vec![0.0f64; m];
