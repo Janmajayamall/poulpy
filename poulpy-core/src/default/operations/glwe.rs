@@ -754,7 +754,7 @@ where
             }
         }
 
-        let (mut res_dft, mut scratch_2) = scratch.borrow().take_vec_znx_dft_scratch(self, cols, tsk_size); // Todo optimise
+        let (mut res_dft, mut scratch_2) = scratch.borrow().take_vec_znx_dft_scratch(self, cols, tsk_size);
         let tsk = tsk.to_backend_ref();
 
         let a_dft_ref = a_dft.to_backend_ref();
