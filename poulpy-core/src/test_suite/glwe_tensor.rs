@@ -203,7 +203,7 @@ where
                 &mut res_relin,
                 &res_tensor,
                 &tsk_prep,
-                res_tensor.size() + tsk_prep.dsize().as_usize(),
+                (res_tensor.size() + tsk_prep.dsize().as_usize()).min(tsk_prep.size()),
                 &mut scratch.borrow(),
             );
             module.glwe_decrypt(&res_relin, &mut pt_have, &sk_dft, &mut scratch.borrow());

@@ -712,8 +712,6 @@ where
         A: GLWEToBackendRef<BE> + GLWEInfos,
         B: GGLWEInfos + GLWETensorKeyPreparedToBackendRef<BE>,
     {
-        assert!(tsk_size <= tsk.size(), "tsk_size: {tsk_size} > tsk.size(): {}", tsk.size());
-
         let scratch = scratch.borrow();
         assert!(
             scratch.available() >= self.glwe_tensor_relinearize_tmp_bytes_default(res, a, tsk),
@@ -721,6 +719,8 @@ where
             scratch.available(),
             self.glwe_tensor_relinearize_tmp_bytes_default(res, a, tsk)
         );
+
+        let tsk_size = tsk.size().min(tsk_size);
 
         let a_base2k: usize = a.base2k().into();
         let key_base2k: usize = tsk.base2k().into();
