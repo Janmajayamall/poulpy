@@ -712,6 +712,8 @@ where
         A: GLWEToBackendRef<BE> + GLWEInfos,
         B: GGLWEInfos + GLWETensorKeyPreparedToBackendRef<BE>,
     {
+        assert!(tsk_size <= tsk.size(), "tsk_size: {tsk_size} > tsk.size(): {}", tsk.size());
+
         let scratch = scratch.borrow();
         assert!(
             scratch.available() >= self.glwe_tensor_relinearize_tmp_bytes_default(res, a, tsk),
