@@ -21,7 +21,11 @@ use crate::{
         CKKSRotateOps, CKKSSubOps, CKKSSubOpsUnnormalized,
     },
     encoding::reim::Encoder,
-    layouts::{CKKSCiphertext, CKKSModuleAlloc, CKKSPlaintextVecHostCodec, ciphertext::CKKSOffset, plaintext::CKKSPlaintext},
+    layouts::{
+        CKKSCiphertext, CKKSModuleAlloc, CKKSPlaintextVecHostCodec,
+        ciphertext::{CKKSMaintainOpsDefault, CKKSOffset},
+        plaintext::CKKSPlaintext,
+    },
     leveled::api::{CKKSDecrypt, CKKSEncrypt},
 };
 use poulpy_core::{
@@ -80,6 +84,7 @@ pub trait TestContextModule<BE: Backend>:
     ModuleNew<BE>
     + ModuleCoreAlloc<OwnedBuf = BE::OwnedBuf>
     + CKKSModuleAlloc<BE>
+    + CKKSMaintainOpsDefault<BE>
     + CKKSAllOpsTmpBytes<BE>
     + CKKSEncrypt<BE>
     + CKKSDecrypt<BE>
@@ -115,6 +120,7 @@ impl<BE: Backend, M> TestContextModule<BE> for M where
     M: ModuleNew<BE>
         + ModuleCoreAlloc<OwnedBuf = BE::OwnedBuf>
         + CKKSModuleAlloc<BE>
+        + CKKSMaintainOpsDefault<BE>
         + CKKSAllOpsTmpBytes<BE>
         + CKKSEncrypt<BE>
         + CKKSDecrypt<BE>

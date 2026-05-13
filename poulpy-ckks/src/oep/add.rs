@@ -8,7 +8,7 @@ use poulpy_hal::{
     oep::HalVecZnxImpl,
 };
 
-use crate::{CKKSInfos, GLWEToBackendMut, GLWEToBackendRef, SetCKKSInfos};
+use crate::{CKKSInfos, GLWEToBackendMut, GLWEToBackendRef, SetCKKSInfos, default::plaintext::CKKSPlaintextDefault};
 
 /// # Safety
 ///
@@ -88,6 +88,7 @@ unsafe impl<BE: Backend> CKKSAddImpl<BE> for BE
 where
     BE: HalVecZnxImpl<BE>,
     Module<BE>: CKKSAddDefault<BE>
+        + CKKSPlaintextDefault<BE>
         + GLWEAdd<BE>
         + GLWENormalize<BE>
         + GLWEShift<BE>
@@ -180,7 +181,7 @@ where
         A: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
         P: GLWEToBackendRef<BE> + LWEInfos + CKKSInfos,
     {
-        module.ckks_add_pt_const_into_default(dst, a, dst_coeff, pt, pt_coeff, scratch)
+        crate::default::add::CKKSAddDefault::ckks_add_pt_const_into_default(module, dst, a, dst_coeff, pt, pt_coeff, scratch)
     }
 
     fn ckks_add_pt_const_assign<Dst, P>(
@@ -198,3 +199,11 @@ where
         module.ckks_add_pt_const_assign_default(dst, dst_coeff, pt, pt_coeff, scratch)
     }
 }
+
+#[macro_export]
+macro_rules! impl_ckks_add_defaults {
+    ($be:ty) => {
+        impl $crate::default::add::CKKSAddDefault<$be> for ::poulpy_hal::layouts::Module<$be> {}
+    };
+}
+pub use crate::impl_ckks_add_defaults;

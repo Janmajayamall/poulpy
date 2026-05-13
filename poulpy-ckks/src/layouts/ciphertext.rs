@@ -350,7 +350,7 @@ pub trait CKKSMaintainOps {
 }
 
 #[doc(hidden)]
-pub trait CKKSMaintainOpsDefault {
+pub trait CKKSMaintainOpsDefault<BE: Backend> {
     fn ckks_reallocate_limbs_checked_default(&self, ct: &mut CKKSCiphertext<Vec<u8>>, size: usize) -> Result<()> {
         let base2k = ct.base2k().as_usize();
         let required_limbs = ct.effective_k().div_ceil(base2k);
@@ -374,12 +374,18 @@ pub trait CKKSMaintainOpsDefault {
     }
 }
 
-impl<BE: Backend> CKKSMaintainOpsDefault for Module<BE> {}
+#[macro_export]
+macro_rules! impl_ckks_maintain_ops_defaults {
+    ($be:ty) => {
+        impl $crate::layouts::ciphertext::CKKSMaintainOpsDefault<$be> for ::poulpy_hal::layouts::Module<$be> {}
+    };
+}
+pub use crate::impl_ckks_maintain_ops_defaults;
 
 impl<BE: Backend> CKKSMaintainOps for Module<BE>
 where
     BE: HostBackend<OwnedBuf = Vec<u8>>,
-    Module<BE>: CKKSMaintainOpsDefault + CKKSModuleAlloc<BE>,
+    Module<BE>: CKKSMaintainOpsDefault<BE> + CKKSModuleAlloc<BE>,
 {
     fn ckks_reallocate_limbs_checked(&self, ct: &mut CKKSCiphertext<Vec<u8>>, size: usize) -> Result<()> {
         self.ckks_reallocate_limbs_checked_default(ct, size)
