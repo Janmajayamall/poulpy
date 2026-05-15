@@ -1,15 +1,16 @@
 [package]
 name = "poulpy-core"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 license = "Apache-2.0"
-description = "A backend agnostic crate implementing RLWE-based encryption & arithmetic."
+description = "A backend agnostic crate implementing Module-LWE-based encryption & arithmetic."
 repository = "https://github.com/poulpy-fhe/poulpy"
 homepage = "https://github.com/poulpy-fhe/poulpy"
 documentation = "https://docs.rs/poulpy"
 
 [features]
 default = []
+enable-core = []
 enable-avx = []
 
 [dependencies]

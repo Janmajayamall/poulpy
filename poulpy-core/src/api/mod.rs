@@ -1,4 +1,4 @@
-//! Safe, user-facing trait definitions for RLWE operations.
+//! Safe, user-facing trait definitions for Module-LWE operations.
 //!
 //! Traits are organized by operation family:
 //! - `automorphism` -- Galois automorphisms on ciphertexts and automorphism keys.
@@ -22,6 +22,7 @@ mod external_product;
 mod keyswitching;
 mod noise;
 mod operations;
+mod transfer;
 
 pub use automorphism::*;
 pub use conversion::*;
@@ -31,3 +32,4 @@ pub use external_product::*;
 pub use keyswitching::*;
 pub use noise::*;
 pub use operations::*;
+pub use transfer::*;

@@ -16,12 +16,60 @@
 ## Library Crates
 
 - **`poulpy-hal`**: a crate providing layouts and a trait-based hardware acceleration layer with open extension points, matching the API and types of spqlios-arithmetic. This crate does not provide concrete implementations other than the layouts (e.g. `VecZnx`, `VmpPmat`).
-- **`poulpy-core`**: a backend-agnostic crate implementing scheme-agnostic RLWE arithmetic for LWE, GLWE, GGLWE, and GGSW ciphertexts using **`poulpy-hal`**. It can be instantiated with any backend crate (e.g. `poulpy-cpu-ref`, `poulpy-cpu-avx`).
+- **`poulpy-core`**: a backend-agnostic crate implementing scheme-agnostic Module-LWE arithmetic for LWE, GLWE, GGLWE, and GGSW ciphertexts using **`poulpy-hal`**. It can be instantiated with any backend crate (e.g. `poulpy-cpu-ref`, `poulpy-cpu-avx`).
 - **`poulpy-ckks`**: a backend-agnostic leveled CKKS implementation built on **`poulpy-core`** and **`poulpy-hal`**. This is the first iteration of the CKKS crate: the evaluator is functional and tested, but the public API is still subject to change.
 - **`poulpy-bin-fhe`**: a backend-agnostic binary/gate-level FHE crate built on **`poulpy-core`** and **`poulpy-hal`**. This replaces the former `poulpy-schemes` crate.
 - **`poulpy-cpu-ref`**: the reference CPU implementation of **`poulpy-hal`**.
 - **`poulpy-cpu-avx`**: an AVX2/FMA accelerated CPU implementation of **`poulpy-hal`**. Enable it with the `enable-avx` feature on crates that expose that feature.
 - **`poulpy-bench`**: the consolidated Criterion benchmark suite for the workspace. It is an internal workspace crate and is not published to crates.io.
+
+## Architecture
+
+### Crate Dependency Chain
+
+```
+poulpy-hal                   ← hardware abstraction: layouts and operation traits
+└── poulpy-core              ← scheme-agnostic Module-LWE arithmetic (LWE, GLWE, GGLWE, GGSW)
+    ├── poulpy-ckks           ← leveled CKKS evaluator
+    └── poulpy-bin-fhe       ← binary / gate-level FHE
+
+poulpy-cpu-ref               ← portable reference backend
+poulpy-cpu-avx               ← AVX2/FMA-accelerated backend
+```
+
+Backend crates (`poulpy-cpu-ref`, `poulpy-cpu-avx`, …) implement the open extension points defined in `poulpy-hal/oep` and are not depended on by any scheme crate. This clean separation means a backend written today automatically works with every current and future scheme layer above it.
+
+### Layer Anatomy
+
+Every layer (`poulpy-hal`, `poulpy-core`, `poulpy-ckks`) follows the same internal four-module pattern:
+
+```
+   ┌─────────┐     ┌─────────┐     ┌─────────────┐     ┌────────────────┐
+   │   api   │────►│   oep   │────►│  delegates  │◄────│    default     │
+   └─────────┘     └─────────┘     └─────────────┘     └────────────────┘
+```
+
+| Module | Role |
+|--------|------|
+| `api` | Public traits user code calls. Bounds reference `oep` for the backend capabilities they need. |
+| `oep` | **Open Extension Points.** Unsafe backend dispatch traits (one per operation family). A blanket `impl` wires any conforming backend to the corresponding `default` method automatically. |
+| `default` | Portable algorithm implementations as safe trait methods — the fallback every new backend gets for free. |
+| `delegates` | Implements each `api` trait on `Module<BE>` by dispatching through `oep`. Composite operations also live here. |
+
+### Overriding at Any Level
+
+A backend overrides any operation by implementing the corresponding `oep` trait directly instead of relying on the blanket `default` wiring. Only the hot-path operations need overrides; everything else inherits the portable `default` implementation for free. This override mechanism is independent at every layer: a backend can override a `poulpy-hal` primitive without touching `poulpy-core` behavior, and vice versa.
+
+### Integrating a Backend
+
+1. Define a backend struct and implement the `Backend` trait from `poulpy-hal`.
+2. For each HAL operation family, either call the blanket default or implement the OEP trait directly with a custom dispatch.
+3. For each `poulpy-core` operation family, either call the corresponding `impl_*_defaults_full!` macro to inherit the portable implementation, or implement the OEP trait directly to override it.
+4. Optionally, do the same for `poulpy-ckks` using the `impl_ckks_*_defaults!` macros or direct OEP trait implementations.
+
+At every layer the macro and the direct implementation are mutually exclusive per operation family: the macro opts the backend into the portable `default` path, while a direct OEP impl replaces it entirely. There is no requirement to use the macros — a backend that needs full control can implement every OEP trait by hand.
+
+See `poulpy-cpu-ref` for the reference implementation of all four steps.
 
 ## Bivariate Polynomial Representation
 
@@ -35,7 +83,7 @@ This provides the following benefits:
 
 - **Linear number of DFTs in the half external product:** The bivariate representation of the coefficients implicitly provides the digit decomposition. As a result, the number of DFTs is linear in the number of limbs, unlike in the RNS representation where it is quadratic due to RNS basis conversion. This enables much more efficient key switching, which is one of the **most used and expensive** FHE operations.
 
-- **Unified plaintext space:** The bivariate polynomial representation is, by nature, a high-precision discretized representation of the Torus $\mathbb{T}_{N}[X]$. Using the Torus as the common plaintext space for all schemes follows the vision of [CHIMERA: Combining Ring-LWE-based Fully Homomorphic Encryption Schemes](https://eprint.iacr.org/2018/758): unifying RLWE-based FHE schemes (TFHE, FHEW, BGV, BFV, CLPX, GBFV, CKKS, ...) under a single scheme with different encodings, enabling native and efficient scheme switching.
+- **Unified plaintext space:** The bivariate polynomial representation is, by nature, a high-precision discretized representation of the Torus $\mathbb{T}_{N}[X]$. Using the Torus as the common plaintext space for all schemes follows the vision of [CHIMERA: Combining Ring-LWE-based Fully Homomorphic Encryption Schemes](https://eprint.iacr.org/2018/758): unifying Module-LWE-based FHE schemes (TFHE, FHEW, BGV, BFV, CLPX, GBFV, CKKS, ...) under a single scheme with different encodings, enabling native and efficient scheme switching.
 
 - **Simpler implementation:** Since cyclotomic arithmetic is decoupled from the coefficient representation, the same pipeline (including DFT) can be reused for all limbs, unlike in the RNS representation. The bivariate representation also has a straightforward flat, aligned, and vectorized memory layout. These properties make it a strong target for hardware acceleration.
 
@@ -72,6 +120,28 @@ poulpy-cpu-ref = "0.5"
 * Architecture diagrams and design notes live in the [`/docs`](./docs) folder.
 * Crate-specific READMEs provide more focused usage notes, especially [`poulpy-ckks`](./poulpy-ckks/README.md) and [`poulpy-bench`](./poulpy-bench/README.md).
 
+## Testing Backend-Gated Integrations
+
+Scheme crate APIs are available when those crates are imported. Backend-owned
+integration tests remain feature-gated so default workspace builds stay light:
+
+```sh
+cargo test -p poulpy-core
+cargo test -p poulpy-ckks
+cargo test -p poulpy-cpu-ref --features enable-core
+cargo test -p poulpy-cpu-ref --features enable-ckks
+cargo test -p poulpy-bin-fhe --features enable-bin-fhe
+```
+
+Benchmark targets are split by family:
+
+```sh
+cargo check -p poulpy-bench --all-targets --features hal-bench
+cargo check -p poulpy-bench --all-targets --features core-bench
+cargo check -p poulpy-bench --all-targets --features bin-fhe-bench
+cargo check -p poulpy-bench --all-targets --features ckks-bench
+```
+
 ## Contributing
 
 We welcome external contributions, please see [CONTRIBUTING](./CONTRIBUTING.md).
@@ -101,9 +171,9 @@ Team behind poulpy accepts financial contributions over various platforms. Pleas
 Please use the following BibTeX entry for citing Poulpy:
 
     @misc{poulpy,
-	    title = {Poulpy v0.5.0},
+	    title = {Poulpy v0.6.0},
 	    howpublished = {Online: \url{https://github.com/poulpy-fhe/poulpy}},
-	    month = Apr,
+	    month = May,
 	    year = 2026,
 	    note = {Phantom Zone}
     }
