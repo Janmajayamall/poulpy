@@ -10,7 +10,7 @@ use crate::{
     encryption::DEFAULT_SIGMA_XE,
     layouts::{
         GGSW, GGSWLayout, GGSWPreparedFactory, GLWE, GLWELayout, GLWEPlaintext, GLWESecret, GLWESecretPreparedFactory,
-        GLWEToBackendMut, GLWEToBackendRef, ModuleCoreAlloc,
+        ModuleCoreAlloc,
         prepared::{GGSWPrepared, GLWESecretPrepared},
     },
     noise::noise_ggsw_product,
@@ -133,16 +133,7 @@ where
             let mut ct_ggsw_prepared: GGSWPrepared<BE::OwnedBuf, BE> = module.ggsw_prepared_alloc_from_infos(&ggsw_apply);
             module.ggsw_prepare(&mut ct_ggsw_prepared, &ggsw_apply, &mut scratch.borrow());
 
-            {
-                let mut glwe_out_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut glwe_out);
-                let glwe_in_backend = <GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&glwe_in);
-                module.glwe_external_product(
-                    &mut glwe_out_backend,
-                    &glwe_in_backend,
-                    &ct_ggsw_prepared,
-                    &mut scratch.borrow(),
-                );
-            }
+            module.glwe_external_product(&mut glwe_out, &glwe_in, &ct_ggsw_prepared, &mut scratch.borrow());
 
             module.vec_znx_rotate_assign_backend(
                 k as i64,
@@ -151,11 +142,7 @@ where
                 &mut scratch.borrow(),
             );
 
-            {
-                let mut pt_out_backend = <GLWEPlaintext<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut pt_out);
-                let pt_in_backend = <GLWEPlaintext<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&pt_in);
-                module.glwe_normalize(&mut pt_out_backend, &pt_in_backend, &mut scratch.borrow());
-            }
+            module.glwe_normalize(&mut pt_out, &pt_in, &mut scratch.borrow());
 
             let var_gct_err_lhs: f64 = DEFAULT_SIGMA_XE * DEFAULT_SIGMA_XE;
             let var_gct_err_rhs: f64 = 0f64;
@@ -293,10 +280,7 @@ where
             let mut ct_ggsw_prepared: GGSWPrepared<BE::OwnedBuf, BE> = module.ggsw_prepared_alloc_from_infos(&ggsw_apply);
             module.ggsw_prepare(&mut ct_ggsw_prepared, &ggsw_apply, &mut scratch.borrow());
 
-            {
-                let mut glwe_out_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut glwe_out);
-                module.glwe_external_product_assign(&mut glwe_out_backend, &ct_ggsw_prepared, &mut scratch.borrow());
-            }
+            module.glwe_external_product_assign(&mut glwe_out, &ct_ggsw_prepared, &mut scratch.borrow());
 
             module.vec_znx_rotate_assign_backend(
                 k as i64,

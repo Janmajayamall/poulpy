@@ -9,9 +9,9 @@ use poulpy_core::{
     GGSWExpandRows, GGSWFromGGLWE, GLWECopy, GLWEDecrypt, GLWENormalize, GLWEPacking, GLWERotate, GLWETrace,
     ScratchArenaTakeCore,
     layouts::{
-        Dsize, GGLWE, GGLWEInfos, GGLWELayout, GGLWEPreparedToBackendRef, GGSWBackendMut, GGSWInfos, GGSWToBackendMut,
-        GLWEAutomorphismKeyHelper, GLWEInfos, GLWELayout, GLWESecretPreparedFactory, GLWEToBackendMut, GLWEToBackendRef,
-        GetGaloisElement, LWEInfos, LWEToBackendRef, ModuleCoreAlloc, Rank, glwe_backend_mut_from_mut,
+        Dsize, GGLWE, GGLWEInfos, GGLWELayout, GGLWEPreparedToBackendRef, GGSWInfos, GGSWToBackendMut, GLWEAutomorphismKeyHelper,
+        GLWEInfos, GLWELayout, GLWEScratchMut, GLWESecretPreparedFactory, GLWEToBackendMut, GLWEToBackendRef, GetGaloisElement,
+        LWEInfos, LWEToBackendRef, ModuleCoreAlloc, Rank,
     },
 };
 
@@ -249,7 +249,7 @@ pub fn circuit_bootstrap_core<R, L, M, BRA, BE>(
 ) where
     BRA: BlindRotationAlgo,
     BE: Backend<OwnedBuf = Vec<u8>> + 'static,
-    R: GGSWToBackendMut<BE>,
+    R: GGSWToBackendMut<BE> + GGSWInfos,
     L: LWEToBackendRef<BE>,
     M: ModuleN
         + ModuleCoreAlloc<OwnedBuf = Vec<u8>>
@@ -354,14 +354,9 @@ pub fn circuit_bootstrap_core<R, L, M, BRA, BE>(
             .execute(module, &mut res_glwe_brk_layout, &lwe_owned, &lut, &mut scratch_1.borrow());
 
         if res_glwe_brk_layout.base2k() == res_glwe_atk_layout.base2k() {
-            module.glwe_copy(
-                &mut <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res_glwe_atk_layout),
-                &<GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&res_glwe_brk_layout),
-            );
+            module.glwe_copy(&mut res_glwe_atk_layout, &res_glwe_brk_layout);
         } else {
-            let mut atk_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res_glwe_atk_layout);
-            let brk_backend = <GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&res_glwe_brk_layout);
-            module.glwe_normalize(&mut atk_backend, &brk_backend, &mut scratch_1.borrow());
+            module.glwe_normalize(&mut res_glwe_atk_layout, &res_glwe_brk_layout, &mut scratch_1.borrow());
         }
     }
 
@@ -377,7 +372,7 @@ pub fn circuit_bootstrap_core<R, L, M, BRA, BE>(
     let log_gap_in: usize = (usize::BITS - (gap * alpha - 1).leading_zeros()) as _;
 
     for i in 0..dnum_res {
-        let mut res_row: GLWE<&mut [u8]> = res_host.at_mut(i, 0);
+        let mut res_row = GLWEScratchMut::<BE>::from_inner(res_host.at_mut(i, 0));
 
         if to_exponent {
             // Isolates i-th LUT and moves coefficients according to requested gap.
@@ -394,27 +389,22 @@ pub fn circuit_bootstrap_core<R, L, M, BRA, BE>(
         } else {
             let mut tmp_row: GLWE<Vec<u8>> = module.glwe_alloc_from_infos(&res_row);
             module.glwe_trace(&mut tmp_row, 0, &res_glwe_atk_layout, &key.atk, &mut scratch_1.borrow());
-            module.glwe_copy(
-                &mut glwe_backend_mut_from_mut::<BE>(&mut res_row),
-                &<GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&tmp_row),
-            );
+            module.glwe_copy(&mut res_row, &tmp_row);
         }
 
         if i + 1 < dnum_res {
-            let mut atk_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res_glwe_atk_layout);
-            module.glwe_rotate_assign(-(gap as i64), &mut atk_backend, &mut scratch_1.borrow());
+            module.glwe_rotate_assign(-(gap as i64), &mut res_glwe_atk_layout, &mut scratch_1.borrow());
         }
     }
 
     // Expands GGLWE to GGSW using GGLWE(s^2)
-    let mut res_backend: GGSWBackendMut<'_, BE> = <R as GGSWToBackendMut<BE>>::to_backend_mut(res);
-    module.ggsw_expand_row(&mut res_backend, &key.tsk, &mut scratch_1.borrow());
+    module.ggsw_expand_row(res, &key.tsk, &mut scratch_1.borrow());
 }
 
 #[allow(clippy::too_many_arguments)]
-fn post_process<'s, A, M, H, K, BE>(
+fn post_process<'s, R, A, M, H, K, BE>(
     module: &M,
-    res: &mut GLWE<&mut [u8]>,
+    res: &mut R,
     a: &A,
     log_gap_in: usize,
     log_gap_out: usize,
@@ -423,6 +413,7 @@ fn post_process<'s, A, M, H, K, BE>(
     scratch: &mut ScratchArena<'s, BE>,
 ) where
     BE: Backend<OwnedBuf = Vec<u8>> + 'static + 's,
+    R: GLWEToBackendMut<BE> + GLWEInfos,
     A: GLWEToBackendRef<BE> + GLWEInfos,
     H: GLWEAutomorphismKeyHelper<K, BE>,
     K: GGLWEPreparedToBackendRef<BE> + GetGaloisElement + GGLWEInfos,
@@ -456,14 +447,10 @@ fn post_process<'s, A, M, H, K, BE>(
 
         for (i, ct) in cts_vec.iter_mut().enumerate().take(steps) {
             if i != 0 {
-                let mut a_trace_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut a_trace);
-                module.glwe_rotate_assign(-(1 << log_gap_in), &mut a_trace_backend, &mut scratch.borrow());
+                module.glwe_rotate_assign(-(1 << log_gap_in), &mut a_trace, &mut scratch.borrow());
             }
 
-            module.glwe_copy(
-                &mut <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(ct),
-                &<GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&a_trace),
-            );
+            module.glwe_copy(ct, &a_trace);
         }
 
         let mut cts = HashMap::new();
@@ -472,18 +459,10 @@ fn post_process<'s, A, M, H, K, BE>(
         }
 
         module.glwe_pack(&mut packed, cts, log_gap_out, auto_keys, &mut scratch.borrow());
-        let mut res_host = glwe_backend_mut_from_mut::<BE>(res);
-        module.glwe_copy(
-            &mut glwe_backend_mut_from_mut::<BE>(&mut res_host),
-            &<GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&packed),
-        );
+        module.glwe_copy(res, &packed);
     } else {
         let mut traced: GLWE<Vec<u8>> = module.glwe_alloc_from_infos(res);
         module.glwe_trace(&mut traced, module.log_n() - log_gap_in + 1, a, auto_keys, scratch);
-        let mut res_host = glwe_backend_mut_from_mut::<BE>(res);
-        module.glwe_copy(
-            &mut glwe_backend_mut_from_mut::<BE>(&mut res_host),
-            &<GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&traced),
-        );
+        module.glwe_copy(res, &traced);
     }
 }

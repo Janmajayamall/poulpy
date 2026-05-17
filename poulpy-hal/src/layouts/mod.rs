@@ -16,6 +16,7 @@ mod mat_znx;
 mod module;
 mod scalar_znx;
 mod scratch;
+mod scratch_views;
 mod serialization;
 mod stats;
 mod svp_ppol;
@@ -30,6 +31,7 @@ pub use mat_znx::*;
 pub use module::*;
 pub use scalar_znx::*;
 pub use scratch::*;
+pub use scratch_views::*;
 pub use serialization::*;
 pub use stats::*;
 pub use svp_ppol::*;
@@ -422,7 +424,6 @@ pub struct NoiseInfos {
 impl NoiseInfos {
     pub fn new(k: usize, sigma: f64, bound: f64) -> Result<Self> {
         anyhow::ensure!(sigma.is_sign_positive(), "sigma must be positive");
-        anyhow::ensure!(sigma >= 1.0, "sigma must be greater or equal to 1");
         anyhow::ensure!(bound >= sigma, "bound: {bound} must be greater or equal to sigma: {sigma}");
         Ok(Self { k, sigma, bound })
     }

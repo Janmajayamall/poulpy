@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use poulpy_core::{
     GLWECopy, GLWEDecrypt, ScratchArenaTakeCore,
-    layouts::{GGSWInfos, GLWE, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, ModuleCoreAlloc, glwe_backend_mut_from_mut},
+    layouts::{GGSWInfos, GLWE, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, ModuleCoreAlloc},
 };
 use poulpy_hal::layouts::{Backend, HostDataMut, Module, ScratchArena, ZnxZero};
 
@@ -50,8 +50,8 @@ where
         bit_mask: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) where
-        R: GLWEToBackendMut<BE>,
-        A: GLWEToBackendMut<BE> + GLWEToBackendRef<BE>,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + GLWEInfos,
         K: GetGGSWBit<BE>,
         BE: 'static,
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
@@ -59,8 +59,6 @@ where
         for<'a> BE: Backend<BufMut<'a> = &'a mut [u8], BufRef<'a> = &'a [u8]>,
     {
         assert!(bit_rsh + bit_mask <= T::BITS as usize);
-
-        let res: &mut GLWE<&mut [u8]> = &mut res.to_backend_mut();
 
         for i in 0..bit_mask {
             let t: usize = 1 << (bit_mask - i - 1);
@@ -88,10 +86,7 @@ where
                         let mut zero: GLWE<BE::OwnedBuf> = self.glwe_alloc_from_infos(res);
                         zero.data_mut().zero();
                         self.cmux_assign(&mut zero, hi, bit, scratch);
-                        self.glwe_copy(
-                            &mut hi.to_backend_mut(),
-                            &<GLWE<BE::OwnedBuf> as GLWEToBackendRef<BE>>::to_backend_ref(&zero),
-                        );
+                        self.glwe_copy(hi, &zero);
                         a.insert(j, hi);
                     }
 
@@ -106,9 +101,9 @@ where
         let out: Option<&mut A> = a.remove(&0);
 
         if let Some(out) = out {
-            self.glwe_copy(&mut glwe_backend_mut_from_mut::<BE>(res), &out.to_backend_ref());
+            self.glwe_copy(res, out);
         } else {
-            res.data_mut().zero();
+            res.to_backend_mut().data_mut().zero();
         }
     }
 }

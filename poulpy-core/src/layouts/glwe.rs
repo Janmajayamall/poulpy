@@ -93,14 +93,12 @@ impl<D: Data> SetLWEInfos for &mut GLWE<D> {
     }
 }
 
-impl<D: HostDataRef> GLWE<D> {
+impl<D: Data> GLWE<D> {
     /// Returns a shared reference to the underlying [`VecZnx`].
     pub fn data(&self) -> &VecZnx<D> {
         &self.data
     }
-}
 
-impl<D: Data> GLWE<D> {
     /// Returns the allocated limb capacity, which can exceed the active `size()`
     /// after a precision-consuming rescale.
     pub fn max_size(&self) -> usize {
@@ -108,7 +106,7 @@ impl<D: Data> GLWE<D> {
     }
 }
 
-impl<D: HostDataMut> GLWE<D> {
+impl<D: Data> GLWE<D> {
     /// Returns a mutable reference to the underlying [`VecZnx`].
     pub fn data_mut(&mut self) -> &mut VecZnx<D> {
         &mut self.data
@@ -129,7 +127,47 @@ impl<D: Data> LWEInfos for GLWE<D> {
     }
 }
 
+impl<D: Data> LWEInfos for &GLWE<D> {
+    fn base2k(&self) -> Base2K {
+        self.base2k
+    }
+
+    fn n(&self) -> Degree {
+        Degree(self.data.n() as u32)
+    }
+
+    fn size(&self) -> usize {
+        self.data.size()
+    }
+}
+
+impl<D: Data> LWEInfos for &mut GLWE<D> {
+    fn base2k(&self) -> Base2K {
+        self.base2k
+    }
+
+    fn n(&self) -> Degree {
+        Degree(self.data.n() as u32)
+    }
+
+    fn size(&self) -> usize {
+        self.data.size()
+    }
+}
+
 impl<D: Data> GLWEInfos for GLWE<D> {
+    fn rank(&self) -> Rank {
+        Rank(self.data.cols() as u32 - 1)
+    }
+}
+
+impl<D: Data> GLWEInfos for &GLWE<D> {
+    fn rank(&self) -> Rank {
+        Rank(self.data.cols() as u32 - 1)
+    }
+}
+
+impl<D: Data> GLWEInfos for &mut GLWE<D> {
     fn rank(&self) -> Rank {
         Rank(self.data.cols() as u32 - 1)
     }
@@ -289,15 +327,17 @@ pub fn glwe_backend_ref_from_ref<'a, 'b, BE: Backend>(glwe: &'a GLWE<BE::BufRef<
     }
 }
 
+impl<'b, BE: Backend + 'b> GLWEToBackendRef<BE> for &GLWE<BE::BufRef<'b>> {
+    fn to_backend_ref(&self) -> GLWEBackendRef<'_, BE> {
+        glwe_backend_ref_from_ref::<BE>(self)
+    }
+}
+
 pub fn glwe_backend_ref_from_mut<'a, 'b, BE: Backend>(glwe: &'a GLWE<BE::BufMut<'b>>) -> GLWEBackendRef<'a, BE> {
     GLWE {
         base2k: glwe.base2k,
         data: poulpy_hal::layouts::vec_znx_backend_ref_from_mut::<BE>(&glwe.data),
     }
-}
-
-pub fn glwe_backend_data_ref<'a, BE: Backend>(glwe: &'a GLWEBackendRef<'_, BE>) -> poulpy_hal::layouts::VecZnxBackendRef<'a, BE> {
-    poulpy_hal::layouts::vec_znx_backend_ref_from_ref::<BE>(&glwe.data)
 }
 
 pub trait GLWEToBackendMut<BE: Backend>: GLWEToBackendRef<BE> {
@@ -333,10 +373,4 @@ pub fn glwe_backend_mut_from_mut<'a, 'b, BE: Backend>(glwe: &'a mut GLWE<BE::Buf
         base2k: glwe.base2k,
         data: poulpy_hal::layouts::vec_znx_backend_mut_from_mut::<BE>(&mut glwe.data),
     }
-}
-
-pub fn glwe_backend_data_mut<'a, BE: Backend>(
-    glwe: &'a mut GLWEBackendMut<'_, BE>,
-) -> poulpy_hal::layouts::VecZnxBackendMut<'a, BE> {
-    poulpy_hal::layouts::vec_znx_backend_mut_from_mut::<BE>(&mut glwe.data)
 }

@@ -110,13 +110,51 @@ impl<D: Data> LWEInfos for GGLWE<D> {
     }
 }
 
+impl<D: Data> LWEInfos for &GGLWE<D> {
+    fn base2k(&self) -> Base2K {
+        self.base2k
+    }
+
+    fn n(&self) -> Degree {
+        Degree(self.data.n() as u32)
+    }
+
+    fn size(&self) -> usize {
+        self.data.size()
+    }
+}
+
 impl<D: Data> GLWEInfos for GGLWE<D> {
     fn rank(&self) -> Rank {
         self.rank_out()
     }
 }
 
+impl<D: Data> GLWEInfos for &GGLWE<D> {
+    fn rank(&self) -> Rank {
+        self.rank_out()
+    }
+}
+
 impl<D: Data> GGLWEInfos for GGLWE<D> {
+    fn rank_in(&self) -> Rank {
+        Rank(self.data.cols_in() as u32)
+    }
+
+    fn rank_out(&self) -> Rank {
+        Rank(self.data.cols_out() as u32 - 1)
+    }
+
+    fn dsize(&self) -> Dsize {
+        self.dsize
+    }
+
+    fn dnum(&self) -> Dnum {
+        Dnum(self.data.rows() as u32)
+    }
+}
+
+impl<D: Data> GGLWEInfos for &GGLWE<D> {
     fn rank_in(&self) -> Rank {
         Rank(self.data.cols_in() as u32)
     }

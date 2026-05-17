@@ -137,9 +137,7 @@ unsafe impl HalImpl<FFT64Avx> for FFT64Avx {
         A: VecZnxToBackendRef<Self>,
         B: VecZnxToBackendRef<Self>,
     {
-        <Self as HalVecZnxDefaults<Self>>::vec_znx_add_into_default(
-            module, res, res_col, a, a_col, b, b_col,
-        )
+        HalVecZnxDefaults::vec_znx_add_into_default(module, res, res_col, a, a_col, b, b_col)
     }
 }
 ```

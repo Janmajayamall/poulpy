@@ -377,7 +377,7 @@ pub fn test_dot_product_const_znx_aligned<BE: Backend, F: TestScalar>(ctx: &Test
         .collect();
     let cst_znxs: Vec<CKKSPlaintext<Vec<u8>>> = const_pairs
         .iter()
-        .map(|(r, i)| ctx.const_rnx(Some(*r), Some(*i), ctx.meta()))
+        .map(|(r, i)| ctx.const_full_rnx(Some(*r), Some(*i), ctx.meta()))
         .collect();
 
     let a_refs: Vec<&_> = a_cts.iter().collect();

@@ -33,7 +33,7 @@ impl<B: Backend> SvpPPolBytesOf for Module<B> {
 impl_svp_delegate!(
     SvpPrepare<B>,
     fn svp_prepare(&self, res: &mut SvpPPolBackendMut<'_, B>, res_col: usize, a: &ScalarZnxBackendRef<'_, B>, a_col: usize) {
-        <B as HalSvpImpl<B>>::svp_prepare(self, res, res_col, a, a_col);
+        B::svp_prepare(self, res, res_col, a, a_col);
     }
 );
 
@@ -46,7 +46,7 @@ impl_svp_delegate!(
         a: &SvpPPolBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalSvpImpl<B>>::svp_ppol_copy_backend(self, res, res_col, a, a_col);
+        B::svp_ppol_copy_backend(self, res, res_col, a, a_col);
     }
 );
 
@@ -61,7 +61,7 @@ impl_svp_delegate!(
         b: &VecZnxBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalSvpImpl<B>>::svp_apply_dft(self, res, res_col, a, a_col, b, b_col);
+        B::svp_apply_dft(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -76,7 +76,7 @@ impl_svp_delegate!(
         b: &VecZnxDftBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalSvpImpl<B>>::svp_apply_dft_to_dft(self, res, res_col, a, a_col, b, b_col);
+        B::svp_apply_dft_to_dft(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -89,6 +89,6 @@ impl_svp_delegate!(
         a: &SvpPPolBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalSvpImpl<B>>::svp_apply_dft_to_dft_assign(self, res, res_col, a, a_col);
+        B::svp_apply_dft_to_dft_assign(self, res, res_col, a, a_col);
     }
 );

@@ -21,13 +21,13 @@ use anyhow::Result;
 use poulpy_ckks::{
     CKKSInfos, CKKSMeta,
     encoding::Encoder,
-    layouts::{CKKSCiphertext, CKKSMaintainOps, CKKSModuleAlloc, CKKSPlaintext, CKKSPlaintextVecHostCodec},
+    layouts::{CKKSCiphertext, CKKSMaintainOps, CKKSModuleAlloc, CKKSPlaintext},
     leveled::api::{CKKSAddOpsUnsafe, CKKSAllOpsTmpBytes, CKKSDecrypt, CKKSEncrypt, CKKSMulAddOps, CKKSMulOps},
 };
 use poulpy_core::{
     EncryptionLayout, GLWENormalize, GLWETensorKeyEncryptSk,
     layouts::{
-        GLWELayout, GLWETensorKeyLayout, GLWETensorKeyPreparedFactory, GLWEToBackendMut, LWEInfos, ModuleCoreAlloc, Rank,
+        GLWELayout, GLWETensorKeyLayout, GLWETensorKeyPreparedFactory, LWEInfos, ModuleCoreAlloc, Rank,
         prepared::{GLWESecretPrepared, GLWESecretPreparedFactory, GLWETensorKeyPrepared},
     },
 };
@@ -113,7 +113,7 @@ fn encode_const_reim(
     prec: CKKSMeta,
 ) -> Result<CKKSPlaintext<Vec<u8>>> {
     let mut pt = module.ckks_pt_vec_znx_alloc(base2k.into(), prec);
-    let n = module.n() as usize;
+    let n = module.n();
     let scale = 2f64.powi(prec.log_delta() as i32);
     let k = prec.effective_k().into();
     if prec.effective_k() <= 63 {
@@ -417,17 +417,14 @@ fn evaluation(
         let mut scratch = setup.scratch.borrow();
         setup
             .module
-            .ckks_add_pt_const_znx_assign_unsafe(&mut right_linear, 0, &encoding.cst_c, 0, &mut scratch)?;
+            .ckks_add_pt_const_assign_unsafe(&mut right_linear, 0, &encoding.cst_c, 0, &mut scratch)?;
     }
     print_ct_meta("c + d * x (not normalized)", &right_linear);
 
     println!("  -> normalize right branch before ct-ct multiply");
     {
         let mut scratch = setup.scratch.borrow();
-        setup.module.glwe_normalize_assign(
-            &mut <CKKSCiphertext<Vec<u8>> as GLWEToBackendMut<BakcendImpl>>::to_backend_mut(&mut right_linear),
-            &mut scratch,
-        );
+        setup.module.glwe_normalize_assign(&mut right_linear, &mut scratch);
     }
     print_ct_meta("c + d * x normalized", &right_linear);
 
@@ -453,7 +450,7 @@ fn evaluation(
         let mut scratch = setup.scratch.borrow();
         setup
             .module
-            .ckks_add_pt_const_znx_into_unsafe(&mut poly, &right_branch, 0, &encoding.cst_a, 0, &mut scratch)?;
+            .ckks_add_pt_const_into_unsafe(&mut poly, &right_branch, 0, &encoding.cst_a, 0, &mut scratch)?;
     }
     print_ct_meta("right_branch + a (not normalized)", &poly);
     {

@@ -1,6 +1,6 @@
 use poulpy_core::{
     GLWEAdd, GLWEMulPlain, GLWENormalize, GLWESub,
-    layouts::{GLWE, GLWEInfos, GLWEPlaintext, GLWEToBackendMut, GLWEToBackendRef, LWEInfos, ModuleCoreAlloc},
+    layouts::{GLWE, GLWEInfos, GLWEPlaintext, LWEInfos, ModuleCoreAlloc},
 };
 use poulpy_hal::{
     api::{ModuleNew, ScratchOwnedAlloc, ScratchOwnedBorrow},
@@ -46,9 +46,7 @@ where
     let mut group = c.benchmark_group(group_name);
     group.bench_function(format!("n={n}"), |bench| {
         bench.iter(|| {
-            let mut res_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res);
-            let b_ref = <GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&b);
-            module.glwe_add_assign_backend(&mut res_backend, &b_ref);
+            module.glwe_add_assign(&mut res, &b);
             black_box(());
         })
     });
@@ -116,9 +114,7 @@ where
     let mut group = c.benchmark_group(group_name);
     group.bench_function(format!("n={n}"), |bench| {
         bench.iter(|| {
-            let mut res_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res);
-            let a_backend = <GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&a);
-            module.glwe_normalize(&mut res_backend, &a_backend, &mut scratch.borrow());
+            module.glwe_normalize(&mut res, &a, &mut scratch.borrow());
             black_box(());
         })
     });
@@ -141,8 +137,7 @@ where
     let mut group = c.benchmark_group(group_name);
     group.bench_function(format!("n={n}"), |bench| {
         bench.iter(|| {
-            let mut res_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res);
-            module.glwe_normalize_assign(&mut res_backend, &mut scratch.borrow());
+            module.glwe_normalize_assign(&mut res, &mut scratch.borrow());
             black_box(());
         })
     });

@@ -43,7 +43,7 @@ impl<B: Backend> VecZnxDftAlloc<B> for Module<B> {
 impl_vec_znx_dft_delegate!(
     VecZnxIdftApplyTmpBytes,
     fn vec_znx_idft_apply_tmp_bytes(&self) -> usize {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_idft_apply_tmp_bytes(self)
+        B::vec_znx_idft_apply_tmp_bytes(self)
     }
 );
 
@@ -57,7 +57,7 @@ impl_vec_znx_dft_delegate!(
         a_col: usize,
         scratch: &mut ScratchArena<'s, B>,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_idft_apply(self, res, res_col, a, a_col, scratch)
+        B::vec_znx_idft_apply(self, res, res_col, a, a_col, scratch)
     }
 );
 
@@ -70,7 +70,7 @@ impl_vec_znx_dft_delegate!(
         a: &mut VecZnxDftBackendMut<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_idft_apply_tmpa(self, res, res_col, a, a_col);
+        B::vec_znx_idft_apply_tmpa(self, res, res_col, a, a_col);
     }
 );
 
@@ -85,7 +85,7 @@ impl_vec_znx_dft_delegate!(
         a: &VecZnxBackendRef<'a, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_apply(self, step, offset, res, res_col, a, a_col);
+        B::vec_znx_dft_apply(self, step, offset, res, res_col, a, a_col);
     }
 );
 
@@ -100,7 +100,7 @@ impl_vec_znx_dft_delegate!(
         b: &VecZnxDftBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_add_into(self, res, res_col, a, a_col, b, b_col);
+        B::vec_znx_dft_add_into(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -113,7 +113,7 @@ impl_vec_znx_dft_delegate!(
         a: &VecZnxDftBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_add_assign(self, res, res_col, a, a_col);
+        B::vec_znx_dft_add_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -127,7 +127,7 @@ impl_vec_znx_dft_delegate!(
         a_col: usize,
         a_scale: i64,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_add_scaled_assign(self, res, res_col, a, a_col, a_scale);
+        B::vec_znx_dft_add_scaled_assign(self, res, res_col, a, a_col, a_scale);
     }
 );
 
@@ -142,7 +142,7 @@ impl_vec_znx_dft_delegate!(
         b: &VecZnxDftBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_sub(self, res, res_col, a, a_col, b, b_col);
+        B::vec_znx_dft_sub(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -155,7 +155,7 @@ impl_vec_znx_dft_delegate!(
         a: &VecZnxDftBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_sub_assign(self, res, res_col, a, a_col);
+        B::vec_znx_dft_sub_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -168,7 +168,7 @@ impl_vec_znx_dft_delegate!(
         a: &VecZnxDftBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_sub_negate_assign(self, res, res_col, a, a_col);
+        B::vec_znx_dft_sub_negate_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -183,13 +183,13 @@ impl_vec_znx_dft_delegate!(
         a: &VecZnxDftBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_copy(self, step, offset, res, res_col, a, a_col);
+        B::vec_znx_dft_copy(self, step, offset, res, res_col, a, a_col);
     }
 );
 
 impl_vec_znx_dft_delegate!(
     VecZnxDftZero<B>,
     fn vec_znx_dft_zero(&self, res: &mut VecZnxDftBackendMut<'_, B>, res_col: usize) {
-        <B as HalVecZnxDftImpl<B>>::vec_znx_dft_zero(self, res, res_col);
+        B::vec_znx_dft_zero(self, res, res_col);
     }
 );

@@ -280,6 +280,9 @@ pub fn test_sub_pt_const_znx_into_aligned<BE: Backend, F: TestScalar>(ctx: &Test
     ctx.module
         .ckks_sub_pt_const_znx_into(&mut ct_res, &ct, 0, &cst_znx, 0, &mut scratch.borrow())
         .unwrap();
+    ctx.module
+        .ckks_sub_pt_const_znx_assign(&mut ct_res, ctx.m(), &cst_znx, 1, &mut scratch.borrow())
+        .unwrap();
     assert_unary_output_meta("sub_pt_const_znx_into_aligned", &ct_res, &ct);
     ctx.assert_decrypt_precision(
         "sub_pt_const_znx_into_aligned",

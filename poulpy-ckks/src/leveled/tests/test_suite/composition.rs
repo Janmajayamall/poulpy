@@ -199,7 +199,7 @@ pub fn test_poly2_sum_with_const<BE: TestCompositionBackend, F: TestScalar>(ctx:
         .ckks_add_into(&mut poly, &term1, &term2, &mut scratch.borrow())
         .unwrap();
     ctx.module
-        .ckks_add_pt_vec_znx_assign(&mut poly, &pt0, &mut scratch.borrow())
+        .ckks_add_pt_vec_assign(&mut poly, &pt0, &mut scratch.borrow())
         .unwrap();
 
     ctx.assert_decrypt_precision("poly2_sum_with_const", &poly, &want_re, &want_im, &mut scratch.borrow());
@@ -241,7 +241,7 @@ pub fn test_poly2_mul<BE: TestCompositionBackend, F: TestScalar>(ctx: &TestConte
         .ckks_add_into(&mut poly, &term1, &term2, &mut scratch.borrow())
         .unwrap();
     ctx.module
-        .ckks_add_pt_vec_znx_assign(&mut poly, &pt0, &mut scratch.borrow())
+        .ckks_add_pt_vec_assign(&mut poly, &pt0, &mut scratch.borrow())
         .unwrap();
 
     let mut res = ctx.alloc_ct(ctx.max_k());

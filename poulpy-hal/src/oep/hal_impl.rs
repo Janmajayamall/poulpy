@@ -917,20 +917,10 @@ pub unsafe trait HalVmpImpl<BE: Backend>: Backend {
         b_size: usize,
     ) -> usize;
 
-    fn vmp_apply_dft_to_dft<'s, R>(
-        module: &Module<BE>,
-        res: &mut R,
-        a: &crate::layouts::VecZnxDftBackendRef<'_, BE>,
-        b: &crate::layouts::VmpPMatBackendRef<'_, BE>,
-        limb_offset: usize,
-        scratch: &mut ScratchArena<'s, BE>,
-    ) where
-        R: crate::layouts::VecZnxDftToBackendMut<BE>;
-
-    fn vmp_apply_dft_to_dft_backend_ref<'s, 'r, 'a>(
+    fn vmp_apply_dft_to_dft<'s, 'r>(
         module: &Module<BE>,
         res: &mut crate::layouts::VecZnxDftBackendMut<'r, BE>,
-        a: &crate::layouts::VecZnxDftBackendRef<'a, BE>,
+        a: &crate::layouts::VecZnxDftBackendRef<'_, BE>,
         b: &crate::layouts::VmpPMatBackendRef<'_, BE>,
         limb_offset: usize,
         scratch: &mut ScratchArena<'s, BE>,

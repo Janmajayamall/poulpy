@@ -156,14 +156,6 @@ pub fn znx_normalize_digit_avx(base2k: usize, res: &mut [i64], src: &mut [i64]) 
             ss = ss.add(1);
         }
     }
-
-    // scalar tail
-    if !n.is_multiple_of(4) {
-        use poulpy_cpu_ref::reference::znx::znx_normalize_digit_ref;
-
-        let off = span << 2;
-        znx_normalize_digit_ref(base2k, &mut res[off..], &mut src[off..]);
-    }
 }
 
 /// # Safety

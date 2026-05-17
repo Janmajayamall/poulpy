@@ -1,13 +1,15 @@
 use poulpy_core::{
-    api::{GLWERotate, ModuleTransfer},
-    layouts::{GLWE, GLWEBackendMut, GLWEBackendRef, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, LWEInfos},
+    layouts::{GLWEBackendMut, GLWEBackendRef, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, LWEInfos},
     oep::{GLWEMulXpMinusOneImpl, GLWERotateImpl},
 };
 use poulpy_hal::{
-    api::{ModuleNew, ScratchOwnedAlloc, ScratchOwnedBorrow, VecZnxDftApply, VecZnxDftZero, VmpApplyDftToDft},
+    api::{
+        VecZnxDftApply, VecZnxDftZero, VecZnxRotateAssignBackend, VecZnxRotateAssignTmpBytes, VecZnxRotateBackend,
+        VecZnxZeroBackend, VmpApplyDftToDft,
+    },
     layouts::{
-        Backend, Module, NoiseInfos, ScratchArena, ScratchOwned, VecZnxBackendMut, VecZnxBackendRef, VecZnxDftToBackendMut,
-        ZnxInfos,
+        Backend, Module, NoiseInfos, ScratchArena, VecZnxBackendMut, VecZnxBackendRef, VecZnxDftToBackendMut,
+        VecZnxDftToBackendRef, ZnxInfos,
     },
     oep::{HalConvolutionImpl, HalModuleImpl, HalSvpImpl, HalVecZnxBigImpl, HalVecZnxDftImpl, HalVecZnxImpl, HalVmpImpl},
 };
@@ -210,62 +212,47 @@ unsafe impl GLWEMulXpMinusOneImpl<DelegatingFFT64Ref> for DelegatingFFT64Ref {
 
 unsafe impl GLWERotateImpl<DelegatingFFT64Ref> for DelegatingFFT64Ref {
     fn glwe_rotate_tmp_bytes(module: &Module<DelegatingFFT64Ref>) -> usize {
-        let delegate: Module<FFT64Ref> = <Module<FFT64Ref> as ModuleNew<FFT64Ref>>::new(module.n() as u64);
-        <Module<FFT64Ref> as GLWERotate<FFT64Ref>>::glwe_rotate_tmp_bytes(&delegate)
+        module.vec_znx_rotate_assign_tmp_bytes()
     }
 
-    fn glwe_rotate<'r, 'a>(
-        module: &Module<DelegatingFFT64Ref>,
-        k: i64,
-        res: &mut GLWEBackendMut<'r, DelegatingFFT64Ref>,
-        a: &GLWEBackendRef<'a, DelegatingFFT64Ref>,
-    ) {
-        let delegate: Module<FFT64Ref> = <Module<FFT64Ref> as ModuleNew<FFT64Ref>>::new(module.n() as u64);
-        <Module<FFT64Ref> as GLWERotate<FFT64Ref>>::glwe_rotate(&delegate, k, res, a);
+    fn glwe_rotate<R, A>(module: &Module<DelegatingFFT64Ref>, k: i64, res: &mut R, a: &A)
+    where
+        R: GLWEToBackendMut<DelegatingFFT64Ref>,
+        A: GLWEToBackendRef<DelegatingFFT64Ref>,
+    {
+        let mut res = res.to_backend_mut();
+        let a = a.to_backend_ref();
+
+        assert_eq!(a.n(), module.n() as u32);
+        assert_eq!(res.n(), module.n() as u32);
+        assert!(res.rank() == a.rank() || a.rank() == 0);
+
+        let res_cols = (res.rank() + 1).into();
+        let a_cols = (a.rank() + 1).into();
+
+        for i in 0..a_cols {
+            module.vec_znx_rotate_backend(k, res.data_mut(), i, a.data(), i);
+        }
+        for i in a_cols..res_cols {
+            module.vec_znx_zero_backend(res.data_mut(), i);
+        }
     }
 
-    fn glwe_rotate_assign<'s, 'r>(
+    fn glwe_rotate_assign<'s, R>(
         module: &Module<DelegatingFFT64Ref>,
         k: i64,
-        res: &mut GLWEBackendMut<'r, DelegatingFFT64Ref>,
-        _scratch: &mut ScratchArena<'s, DelegatingFFT64Ref>,
-    ) {
-        let delegate: Module<FFT64Ref> = <Module<FFT64Ref> as ModuleNew<FFT64Ref>>::new(module.n() as u64);
+        res: &mut R,
+        scratch: &mut ScratchArena<'s, DelegatingFFT64Ref>,
+    ) where
+        R: GLWEToBackendMut<DelegatingFFT64Ref>,
+    {
+        let mut res = res.to_backend_mut();
 
-        let res_host: GLWE<Vec<u8>> = poulpy_hal::layouts::ToOwnedDeep::to_owned_deep(res);
-        let res_src: GLWE<<DelegatingFFT64Ref as Backend>::OwnedBuf> = res_host.reinterpret::<DelegatingFFT64Ref>();
-        let mut res_delegate =
-            <Module<FFT64Ref> as ModuleTransfer<FFT64Ref>>::upload_glwe::<DelegatingFFT64Ref>(&delegate, &res_src);
+        assert_eq!(res.n(), module.n() as u32);
 
-        let mut scratch_owned: ScratchOwned<FFT64Ref> = <ScratchOwned<FFT64Ref> as ScratchOwnedAlloc<FFT64Ref>>::alloc(
-            <Module<FFT64Ref> as GLWERotate<FFT64Ref>>::glwe_rotate_tmp_bytes(&delegate),
-        );
-        let mut scratch_delegate = <ScratchOwned<FFT64Ref> as ScratchOwnedBorrow<FFT64Ref>>::borrow(&mut scratch_owned);
-        let mut res_delegate_backend: GLWEBackendMut<'_, FFT64Ref> =
-            <GLWE<<FFT64Ref as Backend>::OwnedBuf> as poulpy_core::layouts::GLWEToBackendMut<FFT64Ref>>::to_backend_mut(
-                &mut res_delegate,
-            );
-
-        <Module<FFT64Ref> as GLWERotate<FFT64Ref>>::glwe_rotate_assign(
-            &delegate,
-            k,
-            &mut res_delegate_backend,
-            &mut scratch_delegate,
-        );
-
-        let res_back: GLWE<<DelegatingFFT64Ref as Backend>::OwnedBuf> =
-            <Module<FFT64Ref> as ModuleTransfer<FFT64Ref>>::download_glwe::<FFT64Ref>(&delegate, &res_delegate)
-                .reinterpret::<DelegatingFFT64Ref>();
-        let res_back_ref = <GLWE<<DelegatingFFT64Ref as Backend>::OwnedBuf> as poulpy_core::layouts::GLWEToBackendRef<
-            DelegatingFFT64Ref,
-        >>::to_backend_ref(&res_back);
-
-        let mut bytes = Vec::new();
-        poulpy_hal::layouts::WriterTo::write_to(&res_back_ref, &mut bytes)
-            .expect("failed to serialize delegated GLWE rotate inplace result");
-
-        let mut cursor = std::io::Cursor::new(bytes);
-        poulpy_hal::layouts::ReaderFrom::read_from(res, &mut cursor)
-            .expect("failed to write delegated GLWE rotate inplace result back");
+        for i in 0..(res.rank() + 1).into() {
+            let mut scratch_iter = scratch.borrow();
+            module.vec_znx_rotate_assign_backend(k, res.data_mut(), i, &mut scratch_iter);
+        }
     }
 }

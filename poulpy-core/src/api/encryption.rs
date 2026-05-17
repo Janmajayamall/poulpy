@@ -10,7 +10,7 @@ use crate::{
     layouts::{
         GGLWEInfos, GGLWEToBackendMut, GGLWEToGGSWKeyCompressedToBackendMut, GGLWEToGGSWKeyToBackendMut, GGSWCompressedSeedMut,
         GGSWCompressedToBackendMut, GGSWInfos, GGSWToBackendMut, GLWECompressedSeedMut, GLWECompressedToBackendMut, GLWEInfos,
-        GLWEPlaintextToBackendRef, GLWESecretToBackendRef, GLWESwitchingKeyDegreesMut, GLWEToBackendMut, LWEInfos,
+        GLWESecretToBackendRef, GLWESwitchingKeyDegreesMut, GLWEToBackendMut, GLWEToBackendRef, LWEInfos,
         LWEPlaintextToBackendRef, LWESecretToBackendRef, LWEToBackendMut, SetGaloisElement, TorusPrecision,
         compressed::{GGLWECompressedSeedMut, GGLWECompressedToBackendMut},
         prepared::{GLWEPreparedToBackendRef, GLWESecretPreparedToBackendRef},
@@ -63,7 +63,7 @@ pub trait GLWEEncryptSk<BE: Backend> {
         scratch: &mut ScratchArena<'s, BE>,
     ) where
         R: GLWEToBackendMut<BE>,
-        P: GLWEPlaintextToBackendRef<BE>,
+        P: GLWEToBackendRef<BE>,
         E: EncryptionInfos,
         S: GLWESecretPreparedToBackendRef<BE>,
         BE: 's,
@@ -101,9 +101,10 @@ pub trait GLWEEncryptPk<BE: Backend> {
         scratch: &mut ScratchArena<'s, BE>,
     ) where
         R: GLWEToBackendMut<BE> + GLWEInfos,
-        P: GLWEPlaintextToBackendRef<BE> + GLWEInfos,
+        P: GLWEToBackendRef<BE> + GLWEInfos,
         E: EncryptionInfos,
         K: GLWEPreparedToBackendRef<BE> + GetDistribution + GLWEInfos,
+        BE: 's,
         for<'a> ScratchArena<'a, BE>: crate::ScratchArenaTakeCore<'a, BE>;
 
     fn glwe_encrypt_zero_pk<'s, R, K, E>(
@@ -118,6 +119,7 @@ pub trait GLWEEncryptPk<BE: Backend> {
         R: GLWEToBackendMut<BE> + GLWEInfos,
         E: EncryptionInfos,
         K: GLWEPreparedToBackendRef<BE> + GetDistribution + GLWEInfos,
+        BE: 's,
         for<'a> ScratchArena<'a, BE>: crate::ScratchArenaTakeCore<'a, BE>;
 }
 
@@ -349,7 +351,7 @@ pub trait GLWECompressedEncryptSk<BE: Backend> {
         scratch: &mut ScratchArena<'s, BE>,
     ) where
         R: GLWECompressedToBackendMut<BE> + GLWECompressedSeedMut,
-        P: GLWEPlaintextToBackendRef<BE>,
+        P: GLWEToBackendRef<BE>,
         E: EncryptionInfos,
         S: GLWESecretPreparedToBackendRef<BE>,
         BE: 's,
@@ -461,11 +463,11 @@ pub trait GLWETensorKeyCompressedEncryptSk<BE: Backend> {
 }
 
 pub trait GGLWEToGGSWKeyCompressedEncryptSk<BE: Backend> {
-    fn gglwe_to_ggsw_key_encrypt_sk_tmp_bytes<A>(&self, infos: &A) -> usize
+    fn gglwe_to_ggsw_key_compressed_encrypt_sk_tmp_bytes<A>(&self, infos: &A) -> usize
     where
         A: GGLWEInfos;
 
-    fn gglwe_to_ggsw_key_encrypt_sk<R, S, E>(
+    fn gglwe_to_ggsw_key_compressed_encrypt_sk<R, S, E>(
         &self,
         res: &mut R,
         sk: &S,

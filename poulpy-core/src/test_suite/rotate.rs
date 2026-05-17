@@ -6,7 +6,7 @@ use poulpy_hal::{
 
 use crate::{
     GLWERotate, ScratchArenaTakeCore,
-    layouts::{GLWE, GLWEInfos, GLWELayout, GLWEToBackendMut, GLWEToBackendRef},
+    layouts::{GLWE, GLWEInfos, GLWELayout},
 };
 
 fn negacyclic_rotate(src: &[i64], k: i64) -> Vec<i64> {
@@ -60,17 +60,10 @@ where
         }
         inplace.data.raw_mut().copy_from_slice(src.data.raw());
 
-        {
-            let src_backend = <GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&src);
-            let mut out_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut out);
-            module.glwe_rotate(shift, &mut out_backend, &src_backend);
-        }
+        module.glwe_rotate(shift, &mut out, &src);
 
         let mut scratch = ScratchOwned::<BE>::alloc(cols * module.glwe_rotate_tmp_bytes());
-        {
-            let mut inplace_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut inplace);
-            module.glwe_rotate_assign(shift, &mut inplace_backend, &mut scratch.borrow());
-        }
+        module.glwe_rotate_assign(shift, &mut inplace, &mut scratch.borrow());
 
         for col in 0..cols {
             let expected = negacyclic_rotate(src.data.at(col, 0), shift);

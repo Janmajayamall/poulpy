@@ -277,14 +277,14 @@ pub fn test_vmp_apply_dft_to_dft<BR: crate::test_suite::TestBackend<OwnedBuf = V
                     let mut res_dft_test: VecZnxDftOwned<BT> = module_test.vec_znx_dft_alloc(cols_out, size_out);
 
                     module_ref.vmp_apply_dft_to_dft(
-                        &mut res_dft_ref,
+                        &mut res_dft_ref.to_backend_mut(),
                         &a_dft_ref.to_backend_ref(),
                         &pmat_ref.to_backend_ref(),
                         0,
                         &mut scratch_ref.arena(),
                     );
                     module_test.vmp_apply_dft_to_dft(
-                        &mut res_dft_test,
+                        &mut res_dft_test.to_backend_mut(),
                         &a_dft_test.to_backend_ref(),
                         &pmat_test.to_backend_ref(),
                         0,

@@ -35,7 +35,7 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_from_small_backend(res, res_col, a, a_col);
+        B::vec_znx_big_from_small_backend(res, res_col, a, a_col);
     }
 );
 
@@ -67,7 +67,7 @@ impl_vec_znx_big_delegate!(
         noise_infos: NoiseInfos,
         source: &mut Source,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_add_normal_backend(self, base2k, res, res_col, noise_infos, source.new_seed());
+        B::vec_znx_big_add_normal_backend(self, base2k, res, res_col, noise_infos, source.new_seed());
     }
 );
 
@@ -81,7 +81,7 @@ impl_vec_znx_big_delegate!(
         noise_infos: NoiseInfos,
         seed: [u8; 32],
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_add_normal_backend(self, base2k, res, res_col, noise_infos, seed);
+        B::vec_znx_big_add_normal_backend(self, base2k, res, res_col, noise_infos, seed);
     }
 );
 
@@ -96,7 +96,7 @@ impl_vec_znx_big_delegate!(
         b: &VecZnxBigBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_add_into(self, res, res_col, a, a_col, b, b_col);
+        B::vec_znx_big_add_into(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -109,7 +109,7 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBigBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_add_assign(self, res, res_col, a, a_col);
+        B::vec_znx_big_add_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -124,7 +124,7 @@ impl_vec_znx_big_delegate!(
         b: &VecZnxBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_add_small_into_backend(self, res, res_col, a, a_col, b, b_col);
+        B::vec_znx_big_add_small_into_backend(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -137,7 +137,7 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBackendRef<'a, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_add_small_assign(self, res, res_col, a, a_col);
+        B::vec_znx_big_add_small_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -152,7 +152,7 @@ impl_vec_znx_big_delegate!(
         b: &VecZnxBigBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_sub(self, res, res_col, a, a_col, b, b_col);
+        B::vec_znx_big_sub(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -165,7 +165,7 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBigBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_sub_assign(self, res, res_col, a, a_col);
+        B::vec_znx_big_sub_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -178,7 +178,7 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBigBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_sub_negate_assign(self, res, res_col, a, a_col);
+        B::vec_znx_big_sub_negate_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -193,7 +193,7 @@ impl_vec_znx_big_delegate!(
         b: &VecZnxBigBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_sub_small_a_backend(self, res, res_col, a, a_col, b, b_col);
+        B::vec_znx_big_sub_small_a_backend(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -206,7 +206,7 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBackendRef<'a, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_sub_small_assign(self, res, res_col, a, a_col);
+        B::vec_znx_big_sub_small_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -221,7 +221,7 @@ impl_vec_znx_big_delegate!(
         b: &VecZnxBackendRef<'_, B>,
         b_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_sub_small_b_backend(self, res, res_col, a, a_col, b, b_col);
+        B::vec_znx_big_sub_small_b_backend(self, res, res_col, a, a_col, b, b_col);
     }
 );
 
@@ -234,7 +234,7 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBackendRef<'a, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_sub_small_negate_assign(self, res, res_col, a, a_col);
+        B::vec_znx_big_sub_small_negate_assign(self, res, res_col, a, a_col);
     }
 );
 
@@ -247,21 +247,21 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBigBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_negate(self, res, res_col, a, a_col);
+        B::vec_znx_big_negate(self, res, res_col, a, a_col);
     }
 );
 
 impl_vec_znx_big_delegate!(
     VecZnxBigNegateAssign<B>,
     fn vec_znx_big_negate_assign(&self, a: &mut VecZnxBigBackendMut<'_, B>, a_col: usize) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_negate_assign(self, a, a_col);
+        B::vec_znx_big_negate_assign(self, a, a_col);
     }
 );
 
 impl_vec_znx_big_delegate!(
     VecZnxBigNormalizeTmpBytes,
     fn vec_znx_big_normalize_tmp_bytes(&self) -> usize {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_normalize_tmp_bytes(self)
+        B::vec_znx_big_normalize_tmp_bytes(self)
     }
 );
 
@@ -278,7 +278,7 @@ impl_vec_znx_big_delegate!(
         a_col: usize,
         scratch: &mut ScratchArena<'s, B>,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_normalize(self, res, res_base2k, res_offset, res_col, a, a_base2k, a_col, scratch)
+        B::vec_znx_big_normalize(self, res, res_base2k, res_offset, res_col, a, a_base2k, a_col, scratch)
     }
 );
 
@@ -292,14 +292,14 @@ impl_vec_znx_big_delegate!(
         a: &VecZnxBigBackendRef<'_, B>,
         a_col: usize,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_automorphism(self, k, res, res_col, a, a_col);
+        B::vec_znx_big_automorphism(self, k, res, res_col, a, a_col);
     }
 );
 
 impl_vec_znx_big_delegate!(
     VecZnxBigAutomorphismAssignTmpBytes,
     fn vec_znx_big_automorphism_assign_tmp_bytes(&self) -> usize {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_automorphism_assign_tmp_bytes(self)
+        B::vec_znx_big_automorphism_assign_tmp_bytes(self)
     }
 );
 
@@ -312,6 +312,6 @@ impl_vec_znx_big_delegate!(
         a_col: usize,
         scratch: &mut ScratchArena<'s, B>,
     ) {
-        <B as HalVecZnxBigImpl<B>>::vec_znx_big_automorphism_assign(self, k, a, a_col, scratch)
+        B::vec_znx_big_automorphism_assign(self, k, a, a_col, scratch)
     }
 );

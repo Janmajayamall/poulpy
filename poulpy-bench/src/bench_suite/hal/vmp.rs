@@ -7,7 +7,9 @@ use poulpy_hal::{
         ModuleNew, ScratchOwnedAlloc, ScratchOwnedBorrow, VecZnxDftAlloc, VmpApplyDft, VmpApplyDftTmpBytes, VmpApplyDftToDft,
         VmpApplyDftToDftTmpBytes, VmpPMatAlloc, VmpPrepare, VmpPrepareTmpBytes,
     },
-    layouts::{Backend, Module, ScratchOwned, VecZnxDft, VmpPMat, VmpPMatToBackendMut, VmpPMatToBackendRef},
+    layouts::{
+        Backend, Module, ScratchOwned, VecZnxDft, VecZnxDftToBackendMut, VmpPMat, VmpPMatToBackendMut, VmpPMatToBackendRef,
+    },
     source::Source,
 };
 
@@ -155,7 +157,7 @@ where
         move || {
             let pmat = pmat.to_backend_ref();
             let a = crate::vec_znx_dft_backend_ref::<B>(&a);
-            module.vmp_apply_dft_to_dft(&mut res, &a, &pmat, 0, &mut scratch.borrow());
+            module.vmp_apply_dft_to_dft(&mut res.to_backend_mut(), &a, &pmat, 0, &mut scratch.borrow());
             black_box(());
         }
     }

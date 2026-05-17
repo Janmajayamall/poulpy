@@ -20,7 +20,7 @@
 //! | [`test_sub_pt_vec_znx_into_unsafe`] | ct - ZNX plaintext, `VecZnxRshSubBackend` |
 //! | [`test_sub_pt_const_znx_into_aligned_unsafe`] | ct - ZNX const, raw `data_mut()[..] -= digit` path |
 
-use poulpy_core::{GLWENormalize, layouts::GLWEToBackendMut};
+use poulpy_core::GLWENormalize;
 use poulpy_hal::api::ScratchOwnedBorrow;
 
 use crate::{CKKSInfos, leveled::api::CKKSSubOpsUnsafe};
@@ -44,10 +44,7 @@ pub fn test_sub_ct_aligned_unsafe<BE: Backend, F: TestScalar>(ctx: &TestContext<
             .unwrap();
     }
     assert_binary_output_meta("sub_ct_aligned_unsafe", &ct_res, &ct1, &ct2);
-    ctx.module.glwe_normalize_assign(
-        &mut <crate::layouts::CKKSCiphertext<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut ct_res),
-        &mut scratch.borrow(),
-    );
+    ctx.module.glwe_normalize_assign(&mut ct_res, &mut scratch.borrow());
     ctx.assert_decrypt_precision("sub_ct_aligned_unsafe", &ct_res, &want_re, &want_im, &mut scratch.borrow());
 }
 
@@ -64,10 +61,7 @@ pub fn test_sub_ct_assign_aligned_unsafe<BE: Backend, F: TestScalar>(ctx: &TestC
             .unwrap();
     }
     assert_ct_meta("sub_ct_assign_aligned_unsafe", &ct1, expected_log_delta, expected_log_budget);
-    ctx.module.glwe_normalize_assign(
-        &mut <crate::layouts::CKKSCiphertext<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut ct1),
-        &mut scratch.borrow(),
-    );
+    ctx.module.glwe_normalize_assign(&mut ct1, &mut scratch.borrow());
     ctx.assert_decrypt_precision(
         "sub_ct_assign_aligned_unsafe",
         &ct1,
@@ -89,10 +83,7 @@ pub fn test_sub_pt_vec_znx_into_unsafe<BE: Backend, F: TestScalar>(ctx: &TestCon
             .unwrap();
     }
     assert_unary_output_meta("sub_pt_vec_znx_into_unsafe", &ct_res, &ct1);
-    ctx.module.glwe_normalize_assign(
-        &mut <crate::layouts::CKKSCiphertext<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut ct_res),
-        &mut scratch.borrow(),
-    );
+    ctx.module.glwe_normalize_assign(&mut ct_res, &mut scratch.borrow());
     ctx.assert_decrypt_precision(
         "sub_pt_vec_znx_into_unsafe",
         &ct_res,
@@ -114,12 +105,12 @@ pub fn test_sub_pt_const_znx_into_aligned_unsafe<BE: Backend, F: TestScalar>(ctx
         ctx.module
             .ckks_sub_pt_const_znx_into_unsafe(&mut ct_res, &ct, 0, &cst_znx, 0, &mut scratch.borrow())
             .unwrap();
+        ctx.module
+            .ckks_sub_pt_const_znx_assign_unsafe(&mut ct_res, ctx.m(), &cst_znx, 1, &mut scratch.borrow())
+            .unwrap();
     }
     assert_unary_output_meta("sub_pt_const_znx_into_aligned_unsafe", &ct_res, &ct);
-    ctx.module.glwe_normalize_assign(
-        &mut <crate::layouts::CKKSCiphertext<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut ct_res),
-        &mut scratch.borrow(),
-    );
+    ctx.module.glwe_normalize_assign(&mut ct_res, &mut scratch.borrow());
     ctx.assert_decrypt_precision(
         "sub_pt_const_znx_into_aligned_unsafe",
         &ct_res,

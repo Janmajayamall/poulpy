@@ -58,7 +58,7 @@ where
         self.ckks_encrypt_sk_tmp_bytes(ct_infos)
             .max(self.ckks_decrypt_tmp_bytes(ct_infos))
             .max(self.ckks_add_tmp_bytes())
-            .max(self.ckks_add_pt_vec_znx_tmp_bytes())
+            .max(self.ckks_add_pt_vec_tmp_bytes())
             .max(self.ckks_add_pt_const_tmp_bytes())
             .max(self.ckks_sub_tmp_bytes())
             .max(self.ckks_sub_pt_vec_znx_tmp_bytes())

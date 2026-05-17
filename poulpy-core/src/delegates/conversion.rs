@@ -1,11 +1,11 @@
 use poulpy_hal::layouts::{Backend, Module, ScratchArena};
 
 use crate::{
-    api::{GGSWExpandRows, GGSWFromGGLWE, GLWEFromLWE, LWEFromGLWE},
+    api::{GGSWExpandRows, GGSWFromGGLWE, GLWEFromLWE, LWEFromGLWE, LWESampleExtract},
     conversion::LWEFromGLWEDefault,
     layouts::{
-        GGLWEInfos, GGSWBackendMut, GGSWInfos, GGSWToBackendMut, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, LWEInfos,
-        LWEToBackendMut, LWEToBackendRef,
+        GGLWEInfos, GGSWInfos, GGSWToBackendMut, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, LWEInfos, LWEToBackendMut,
+        LWEToBackendRef,
         prepared::{GGLWEPreparedToBackendRef, GGLWEToGGSWKeyPreparedToBackendRef},
     },
     oep::{ConversionImpl, GLWEKeyswitchImpl, GLWERotateImpl},
@@ -21,6 +21,18 @@ macro_rules! impl_conversion_delegate {
         }
     };
 }
+
+impl_conversion_delegate!(
+    LWESampleExtract<BE>,
+    [BE: Backend + ConversionImpl<BE>],
+    fn lwe_sample_extract<R, A>(&self, res: &mut R, a: &A)
+    where
+        R: LWEToBackendMut<BE> + LWEInfos,
+        A: GLWEToBackendRef<BE> + GLWEInfos,
+    {
+        BE::lwe_sample_extract(self, res, a)
+    }
+);
 
 impl_conversion_delegate!(
     GLWEFromLWE<BE>,
@@ -123,13 +135,14 @@ impl_conversion_delegate!(
         BE::ggsw_expand_rows_tmp_bytes(self, res_infos, tsk_infos)
     }
 
-    fn ggsw_expand_row<'s, 'r, T>(
+    fn ggsw_expand_row<'s, R, T>(
         &self,
-        res: &mut GGSWBackendMut<'r, BE>,
+        res: &mut R,
         tsk: &T,
         scratch: &mut ScratchArena<'s, BE>,
     )
     where
+        R: GGSWToBackendMut<BE> + GGSWInfos,
         T: GGLWEToGGSWKeyPreparedToBackendRef<BE> + GGLWEInfos,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {

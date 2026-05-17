@@ -1,8 +1,8 @@
 use poulpy_core::{
     GLWECopy, GLWERotate, ScratchArenaTakeCore,
     layouts::{
-        GGSW, GGSWInfos, GGSWToBackendMut, GGSWToBackendRef, GLWE, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, LWEInfos,
-        ModuleCoreAlloc, glwe_backend_mut_from_mut, glwe_backend_ref_from_mut, glwe_backend_ref_from_ref,
+        GGSWInfos, GGSWToBackendMut, GGSWToBackendRef, GLWE, GLWEInfos, GLWEScratchMut, GLWEScratchRef, GLWEToBackendMut,
+        GLWEToBackendRef, LWEInfos, ModuleCoreAlloc,
     },
 };
 use poulpy_hal::{
@@ -67,13 +67,12 @@ where
         for<'a> BE::BufMut<'a>: HostDataMut,
         for<'a> BE: Backend<BufMut<'a> = &'a mut [u8], BufRef<'a> = &'a [u8]>,
     {
-        let res: &mut GGSW<&mut [u8]> = &mut res.to_backend_mut();
+        let res = &mut res.to_backend_mut();
 
         for col in 0..(res.rank() + 1).into() {
             for row in 0..res.dnum().into() {
-                let mut res_at = res.at_mut(row, col);
-                let mut res_at_backend = glwe_backend_mut_from_mut::<BE>(&mut res_at);
-                self.glwe_blind_rotation_assign(&mut res_at_backend, fhe_uint, sign, bit_rsh, bit_mask, bit_lsh, scratch);
+                let mut res_at = GLWEScratchMut::<BE>::from_inner(res.at_mut(row, col));
+                self.glwe_blind_rotation_assign(&mut res_at, fhe_uint, sign, bit_rsh, bit_mask, bit_lsh, scratch);
             }
         }
     }
@@ -100,26 +99,17 @@ where
         for<'a> BE::BufMut<'a>: HostDataMut,
         for<'a> BE: Backend<BufMut<'a> = &'a mut [u8], BufRef<'a> = &'a [u8]>,
     {
-        let res: &mut GGSW<&mut [u8]> = &mut res.to_backend_mut();
-        let a: &GGSW<&[u8]> = &a.to_backend_ref();
+        let res = &mut res.to_backend_mut();
+        let a = &a.to_backend_ref();
 
         assert!(res.dnum() <= a.dnum());
         assert_eq!(res.dsize(), a.dsize());
 
         for col in 0..(res.rank() + 1).into() {
             for row in 0..res.dnum().into() {
-                let mut res_at = res.at_mut(row, col);
-                let a_at = a.at(row, col);
-                self.glwe_blind_rotation(
-                    &mut glwe_backend_mut_from_mut::<BE>(&mut res_at),
-                    &glwe_backend_ref_from_ref::<BE>(&a_at),
-                    fhe_uint,
-                    sign,
-                    bit_rsh,
-                    bit_mask,
-                    bit_lsh,
-                    scratch,
-                );
+                let mut res_at = GLWEScratchMut::<BE>::from_inner(res.at_mut(row, col));
+                let a_at = GLWEScratchRef::<BE>::from_inner(a.at(row, col));
+                self.glwe_blind_rotation(&mut res_at, &a_at, fhe_uint, sign, bit_rsh, bit_mask, bit_lsh, scratch);
             }
         }
     }
@@ -152,7 +142,7 @@ where
         for<'a> BE::BufMut<'a>: HostDataMut,
         for<'a> BE: Backend<BufMut<'a> = &'a mut [u8], BufRef<'a> = &'a [u8]>,
     {
-        let res: &mut GGSW<&mut [u8]> = &mut res.to_backend_mut();
+        let res = &mut res.to_backend_mut();
 
         let base2k: usize = res.base2k().into();
         let dsize: usize = res.dsize().into();
@@ -180,10 +170,10 @@ where
                     self.vec_znx_normalize_assign_backend(base2k, &mut tmp_glwe_data, col, &mut scratch_1.borrow());
                 }
 
-                let mut res_at = res.at_mut(row, col);
+                let mut res_at = GLWEScratchMut::<BE>::from_inner(res.at_mut(row, col));
                 self.glwe_blind_rotation(
-                    &mut glwe_backend_mut_from_mut::<BE>(&mut res_at),
-                    &<GLWE<BE::OwnedBuf> as GLWEToBackendRef<BE>>::to_backend_ref(&tmp_glwe),
+                    &mut res_at,
+                    &tmp_glwe,
                     fhe_uint,
                     sign,
                     bit_rsh,
@@ -231,9 +221,9 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn glwe_blind_rotation_assign<K>(
+    fn glwe_blind_rotation_assign<R, K>(
         &self,
-        res: &mut poulpy_core::layouts::GLWEBackendMut<'_, BE>,
+        res: &mut R,
         value: &K,
         sign: bool,
         bit_rsh: usize,
@@ -241,6 +231,7 @@ where
         bit_lsh: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) where
+        R: GLWEToBackendMut<BE> + GLWEInfos,
         K: GetGGSWBit<BE>,
         BE: Backend<OwnedBuf = Vec<u8>>,
         BE: 'static,
@@ -248,16 +239,12 @@ where
         for<'a> BE::BufMut<'a>: HostDataMut,
         for<'a> BE: Backend<BufMut<'a> = &'a mut [u8], BufRef<'a> = &'a [u8]>,
     {
-        let res_infos = res.glwe_layout();
         // TODO(device): this ping-pong helper still relies on a host-owned
         // temporary ciphertexts for both ping-pong branches.
-        let mut res_cur: GLWE<BE::OwnedBuf> = self.glwe_alloc_from_infos(&res_infos);
-        let mut tmp_res: GLWE<BE::OwnedBuf> = self.glwe_alloc_from_infos(&res_infos);
+        let mut res_cur: GLWE<BE::OwnedBuf> = self.glwe_alloc_from_infos(res);
+        let mut tmp_res: GLWE<BE::OwnedBuf> = self.glwe_alloc_from_infos(res);
         let mut scratch_1 = scratch.borrow();
-        self.glwe_copy(
-            &mut <GLWE<BE::OwnedBuf> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res_cur),
-            &glwe_backend_ref_from_mut::<BE>(res),
-        );
+        self.glwe_copy(&mut res_cur, res);
 
         // a_is_cur = true  => source is `res_cur`, dest is `tmp_res`
         // a_is_cur = false => source is `tmp_res`, dest is `res_cur`
@@ -265,21 +252,17 @@ where
 
         for i in 0..bit_mask {
             if a_is_cur {
-                let res_cur_ref = <GLWE<BE::OwnedBuf> as GLWEToBackendRef<BE>>::to_backend_ref(&res_cur);
-                let mut tmp_res_backend = <GLWE<BE::OwnedBuf> as GLWEToBackendMut<BE>>::to_backend_mut(&mut tmp_res);
                 match sign {
-                    true => self.glwe_rotate(1 << (i + bit_lsh), &mut tmp_res_backend, &res_cur_ref),
-                    false => self.glwe_rotate(-1 << (i + bit_lsh), &mut tmp_res_backend, &res_cur_ref),
+                    true => self.glwe_rotate(1 << (i + bit_lsh), &mut tmp_res, &res_cur),
+                    false => self.glwe_rotate(-1 << (i + bit_lsh), &mut tmp_res, &res_cur),
                 }
 
                 let bit = value.get_bit(i + bit_rsh);
                 self.cmux_assign(&mut tmp_res, &res_cur, bit, &mut scratch_1.borrow());
             } else {
-                let tmp_res_ref = <GLWE<BE::OwnedBuf> as GLWEToBackendRef<BE>>::to_backend_ref(&tmp_res);
-                let mut res_cur_backend = <GLWE<BE::OwnedBuf> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res_cur);
                 match sign {
-                    true => self.glwe_rotate(1 << (i + bit_lsh), &mut res_cur_backend, &tmp_res_ref),
-                    false => self.glwe_rotate(-1 << (i + bit_lsh), &mut res_cur_backend, &tmp_res_ref),
+                    true => self.glwe_rotate(1 << (i + bit_lsh), &mut res_cur, &tmp_res),
+                    false => self.glwe_rotate(-1 << (i + bit_lsh), &mut res_cur, &tmp_res),
                 }
 
                 let bit = value.get_bit(i + bit_rsh);
@@ -291,15 +274,15 @@ where
         }
 
         let final_res: &GLWE<BE::OwnedBuf> = if a_is_cur { &res_cur } else { &tmp_res };
-        self.glwe_copy(res, &<GLWE<BE::OwnedBuf> as GLWEToBackendRef<BE>>::to_backend_ref(final_res));
+        self.glwe_copy(res, final_res);
     }
 
     #[allow(clippy::too_many_arguments)]
     /// res <- a * X^{sign * ((k>>bit_rsh) % 2^bit_mask) << bit_lsh}.
-    fn glwe_blind_rotation<K>(
+    fn glwe_blind_rotation<R, A, K>(
         &self,
-        res: &mut poulpy_core::layouts::GLWEBackendMut<'_, BE>,
-        a: &poulpy_core::layouts::GLWEBackendRef<'_, BE>,
+        res: &mut R,
+        a: &A,
         fhe_uint: &K,
         sign: bool,
         bit_rsh: usize,
@@ -307,6 +290,8 @@ where
         bit_lsh: usize,
         scratch: &mut ScratchArena<'_, BE>,
     ) where
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendRef<BE>,
         K: GetGGSWBit<BE>,
         BE: Backend<OwnedBuf = Vec<u8>>,
         BE: 'static,

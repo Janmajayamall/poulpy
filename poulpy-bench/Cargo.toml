@@ -10,7 +10,13 @@ publish = false
 readme = "README.md"
 
 [features]
-enable-avx = ["dep:poulpy-cpu-avx", "poulpy-cpu-avx/enable-avx", "poulpy-core/enable-avx", "poulpy-bin-fhe/enable-avx"]
+enable-avx = [
+    "dep:poulpy-cpu-avx",
+    "poulpy-cpu-avx/enable-avx",
+    "poulpy-core/enable-avx",
+    "poulpy-bin-fhe/enable-avx",
+    "poulpy-ckks?/enable-avx",
+]
 ckks-bench = ["dep:poulpy-ckks"]
 # enable-gpu = ["dep:poulpy-gpu", "poulpy-gpu/enable-gpu"]
 

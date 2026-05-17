@@ -170,7 +170,7 @@ where
         let mut b_dft = poulpy_hal::layouts::VecZnxDftOwned::<BE>::alloc(module.n(), 1, b_size);
         let mut b_dft_ref = b_dft.to_backend_mut();
 
-        <Module<BE> as VecZnxDftApply<BE>>::vec_znx_dft_apply(module, 1, 0, &mut b_dft_ref, 0, b, b_col);
+        module.vec_znx_dft_apply(1, 0, &mut b_dft_ref, 0, b, b_col);
 
         let meta = module.get_bbc_meta();
         let n = res.n();

@@ -202,7 +202,7 @@ pub fn test_add_pt_vec_znx_assign<BE: Backend, F: TestScalar>(ctx: &TestContext<
     let expected_log_delta = ct.log_delta();
     let expected_log_budget = ct.log_budget();
     ctx.module
-        .ckks_add_pt_vec_znx_assign(&mut ct, &pt_znx, &mut scratch.borrow())
+        .ckks_add_pt_vec_assign(&mut ct, &pt_znx, &mut scratch.borrow())
         .unwrap();
     assert_ct_meta("add_pt_vec_znx_assign", &ct, expected_log_delta, expected_log_budget);
     ctx.assert_decrypt_precision("add_pt_vec_znx_assign", &ct, &want_re, &want_im, &mut scratch.borrow());
@@ -216,7 +216,7 @@ pub fn test_add_pt_vec_znx_into_aligned<BE: Backend, F: TestScalar>(ctx: &TestCo
     let (want_re, want_im) = ctx.want_add();
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     ctx.module
-        .ckks_add_pt_vec_znx_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
+        .ckks_add_pt_vec_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
         .unwrap();
     assert_unary_output_meta("add_pt_vec_znx", &ct_res, &ct1);
     ctx.assert_decrypt_precision("add_pt_vec_znx", &ct_res, &want_re, &want_im, &mut scratch.borrow());
@@ -234,7 +234,7 @@ pub fn test_add_pt_vec_znx_into_delta_log_delta<BE: Backend, F: TestScalar>(ctx:
     let (want_re, want_im) = ctx.want_add_from(&a_re, &a_im, &b_re, &b_im);
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     ctx.module
-        .ckks_add_pt_vec_znx_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
+        .ckks_add_pt_vec_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
         .unwrap();
     assert_unary_output_meta("add_pt_vec_znx delta_log_delta", &ct_res, &ct1);
     ctx.assert_decrypt_precision_at_log_delta(
@@ -256,7 +256,10 @@ pub fn test_add_const_into_aligned<BE: Backend, F: TestScalar>(ctx: &TestContext
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     let cst = ctx.const_rnx(Some(CONST_RE), Some(CONST_IM), ct.meta());
     ctx.module
-        .ckks_add_pt_const_znx_into(&mut ct_res, &ct, 0, &cst, 0, &mut scratch.borrow())
+        .ckks_add_pt_const_into(&mut ct_res, &ct, 0, &cst, 0, &mut scratch.borrow())
+        .unwrap();
+    ctx.module
+        .ckks_add_pt_const_assign(&mut ct_res, ctx.m(), &cst, 1, &mut scratch.borrow())
         .unwrap();
     assert_unary_output_meta("add_const_into_aligned", &ct_res, &ct);
     ctx.assert_decrypt_precision("add_const_into_aligned", &ct_res, &want_re, &want_im, &mut scratch.borrow());
@@ -272,7 +275,10 @@ pub fn test_add_const_assign<BE: Backend, F: TestScalar>(ctx: &TestContext<BE, F
     let expected_log_budget = ct.log_budget();
     let cst = ctx.const_rnx(Some(CONST_RE), Some(CONST_IM), ct.meta());
     ctx.module
-        .ckks_add_pt_const_znx_assign(&mut ct, 0, &cst, 0, &mut scratch.borrow())
+        .ckks_add_pt_const_assign(&mut ct, 0, &cst, 0, &mut scratch.borrow())
+        .unwrap();
+    ctx.module
+        .ckks_add_pt_const_assign(&mut ct, ctx.m(), &cst, 1, &mut scratch.borrow())
         .unwrap();
     assert_ct_meta("add_const_assign", &ct, expected_log_delta, expected_log_budget);
     ctx.assert_decrypt_precision("add_const_assign", &ct, &want_re, &want_im, &mut scratch.borrow());
@@ -289,7 +295,10 @@ pub fn test_add_const_into_delta_log_delta<BE: Backend, F: TestScalar>(ctx: &Tes
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     let cst = ctx.const_rnx(Some(CONST_RE), Some(CONST_IM), low_prec);
     ctx.module
-        .ckks_add_pt_const_znx_into(&mut ct_res, &ct, 0, &cst, 0, &mut scratch.borrow())
+        .ckks_add_pt_const_into(&mut ct_res, &ct, 0, &cst, 0, &mut scratch.borrow())
+        .unwrap();
+    ctx.module
+        .ckks_add_pt_const_assign(&mut ct_res, ctx.m(), &cst, 1, &mut scratch.borrow())
         .unwrap();
     assert_unary_output_meta("add_const_into_delta_log_delta", &ct_res, &ct);
     ctx.assert_decrypt_precision_at_log_delta(
@@ -311,7 +320,7 @@ pub fn test_add_const_into_real_only<BE: Backend, F: TestScalar>(ctx: &TestConte
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     let cst = ctx.const_rnx(Some(CONST_RE), None, ct.meta());
     ctx.module
-        .ckks_add_pt_const_znx_into(&mut ct_res, &ct, 0, &cst, 0, &mut scratch.borrow())
+        .ckks_add_pt_const_into(&mut ct_res, &ct, 0, &cst, 0, &mut scratch.borrow())
         .unwrap();
     assert_unary_output_meta("add_const_into_real_only", &ct_res, &ct);
     ctx.assert_decrypt_precision("add_const_into_real_only", &ct_res, &want_re, &want_im, &mut scratch.borrow());
@@ -325,7 +334,10 @@ pub fn test_add_const_znx_into_aligned<BE: Backend, F: TestScalar>(ctx: &TestCon
     let mut ct_res = ctx.alloc_ct(ctx.max_k());
     let cst_znx = ctx.const_rnx(Some(CONST_RE), Some(CONST_IM), ctx.meta());
     ctx.module
-        .ckks_add_pt_const_znx_into(&mut ct_res, &ct, 0, &cst_znx, 0, &mut scratch.borrow())
+        .ckks_add_pt_const_into(&mut ct_res, &ct, 0, &cst_znx, 0, &mut scratch.borrow())
+        .unwrap();
+    ctx.module
+        .ckks_add_pt_const_assign(&mut ct_res, ctx.m(), &cst_znx, 1, &mut scratch.borrow())
         .unwrap();
     assert_unary_output_meta("add_const_znx_into_aligned", &ct_res, &ct);
     ctx.assert_decrypt_precision(
@@ -348,7 +360,7 @@ pub fn test_add_pt_vec_znx_into_smaller_output<BE: Backend, F: TestScalar>(ctx: 
     let (want_re, want_im) = ctx.want_add();
     let mut ct_res = ctx.alloc_ct(ctx.max_k() - ctx.base2k().as_usize() - 1);
     ctx.module
-        .ckks_add_pt_vec_znx_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
+        .ckks_add_pt_vec_into(&mut ct_res, &ct1, &pt_znx, &mut scratch.borrow())
         .unwrap();
     assert_unary_output_meta("add_pt_vec_znx smaller_output", &ct_res, &ct1);
     ctx.assert_decrypt_precision(
@@ -369,13 +381,13 @@ pub fn test_add_pt_vec_znx_base2k_mismatch_error<BE: Backend, F: TestScalar>(ctx
         .ckks_pt_vec_znx_alloc(Base2K((ctx.base2k().as_usize() / 2) as u32), ctx.meta());
     let err = ctx
         .module
-        .ckks_add_pt_vec_znx_assign(&mut ct, &pt_znx, &mut scratch.borrow())
+        .ckks_add_pt_vec_assign(&mut ct, &pt_znx, &mut scratch.borrow())
         .unwrap_err();
     assert_ckks_error(
         "add_pt_vec_znx_base2k_mismatch",
         &err,
         CKKSCompositionError::PlaintextBase2KMismatch {
-            op: "ckks_add_pt_vec_znx_into",
+            op: "ckks_add_pt_vec",
             ct_base2k: ctx.base2k().as_usize(),
             pt_base2k: pt_znx.base2k().as_usize(),
         },

@@ -1,9 +1,6 @@
 use poulpy_core::{
     api::{GLWEMulXpMinusOne, GLWERotate},
-    layouts::{
-        Base2K, Degree, GLWE, GLWEBackendMut, GLWEBackendRef, GLWELayout, GLWEToBackendMut, GLWEToBackendRef, ModuleCoreAlloc,
-        Rank, TorusPrecision,
-    },
+    layouts::{Base2K, Degree, GLWE, GLWELayout, ModuleCoreAlloc, Rank, TorusPrecision},
 };
 use poulpy_hal::{
     layouts::{FillUniform, Module},
@@ -50,16 +47,8 @@ fn delegating_backend_delegated_family_matches_fft64_ref() {
     let mut delegating_out = module_delegating.glwe_alloc_from_infos(&input);
     let mut ref_out = module_ref.glwe_alloc_from_infos(&input);
 
-    let input_delegating: GLWEBackendRef<'_, DelegatingFFT64Ref> =
-        <GLWE<Vec<u8>> as GLWEToBackendRef<DelegatingFFT64Ref>>::to_backend_ref(&input);
-    let mut delegating_out_backend: GLWEBackendMut<'_, DelegatingFFT64Ref> =
-        <GLWE<Vec<u8>> as GLWEToBackendMut<DelegatingFFT64Ref>>::to_backend_mut(&mut delegating_out);
-    module_delegating.glwe_rotate(11, &mut delegating_out_backend, &input_delegating);
-
-    let input_ref: GLWEBackendRef<'_, FFT64Ref> = <GLWE<Vec<u8>> as GLWEToBackendRef<FFT64Ref>>::to_backend_ref(&input);
-    let mut ref_out_backend: GLWEBackendMut<'_, FFT64Ref> =
-        <GLWE<Vec<u8>> as GLWEToBackendMut<FFT64Ref>>::to_backend_mut(&mut ref_out);
-    module_ref.glwe_rotate(11, &mut ref_out_backend, &input_ref);
+    module_delegating.glwe_rotate(11, &mut delegating_out, &input);
+    module_ref.glwe_rotate(11, &mut ref_out, &input);
 
     assert_eq!(delegating_out, ref_out);
 }

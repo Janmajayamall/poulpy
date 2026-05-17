@@ -37,7 +37,7 @@ pub fn znx_fill_normal_f64_ref(res: &mut [i64], sigma: f64, bound: f64, source: 
         while dist_f64.abs() > bound {
             dist_f64 = normal.sample(source)
         }
-        *xi = dist_f64.round() as i64
+        *xi = dist_f64.floor() as i64
     })
 }
 
@@ -48,6 +48,6 @@ pub fn znx_add_normal_f64_ref(res: &mut [i64], sigma: f64, bound: f64, source: &
         while dist_f64.abs() > bound {
             dist_f64 = normal.sample(source)
         }
-        *xi += dist_f64.round() as i64
+        *xi += dist_f64.floor() as i64
     })
 }

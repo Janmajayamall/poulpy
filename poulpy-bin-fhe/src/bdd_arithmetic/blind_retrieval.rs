@@ -123,10 +123,7 @@ impl GLWEBlindRetriever<Vec<u8>> {
                 acc_prev[i].num = 0;
             }
         }
-        module.glwe_copy(
-            &mut res.to_backend_mut(),
-            &<GLWE<BE::OwnedBuf> as GLWEToBackendRef<BE>>::to_backend_ref(&self.accumulators.last().unwrap().data),
-        );
+        module.glwe_copy(res, &self.accumulators.last().unwrap().data);
         self.reset()
     }
 
@@ -178,10 +175,7 @@ fn add_core<A, S, M, BE>(
 
     match acc_prev[0].num {
         0 => {
-            module.glwe_copy(
-                &mut <GLWE<BE::OwnedBuf> as GLWEToBackendMut<BE>>::to_backend_mut(&mut acc_prev[0].data),
-                &a.to_backend_ref(),
-            );
+            module.glwe_copy(&mut acc_prev[0].data, a);
             acc_prev[0].num = 1;
         }
         1 => {

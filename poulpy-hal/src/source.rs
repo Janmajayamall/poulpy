@@ -42,7 +42,7 @@ impl Source {
     /// Draws 32 random bytes suitable for use as a derived seed.
     pub fn new_seed(&mut self) -> [u8; 32] {
         let mut seed: [u8; 32] = [0u8; 32];
-        self.fill_bytes(&mut seed);
+        self.fill_bytes(&mut seed[..16]);
         seed
     }
 
@@ -68,7 +68,7 @@ impl Source {
     #[inline(always)]
     pub fn next_f64(&mut self, min: f64, max: f64) -> f64 {
         debug_assert!(min <= max, "next_f64: min ({min}) > max ({max})");
-        min + ((self.next_u64() << 11 >> 11) as f64) / MAXF64 * (max - min)
+        min + ((self.next_u64() >> 11) as f64) / MAXF64 * (max - min)
     }
 
     /// Returns a uniformly distributed `i32` (bit-reinterpretation of a random `u32`).

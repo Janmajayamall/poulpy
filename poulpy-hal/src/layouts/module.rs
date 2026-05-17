@@ -192,7 +192,7 @@ impl<B: Backend> Module<B> {
     where
         Self: crate::api::ModuleNew<B>,
     {
-        <Self as crate::api::ModuleNew<B>>::new(n)
+        crate::api::ModuleNew::new(n)
     }
 
     /// Creates a module from a [`NonNull`] backend handle.

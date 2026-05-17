@@ -3,8 +3,7 @@ use crate::{
     layouts::{CKKSModuleAlloc, ciphertext::CKKSMaintainOps},
     leveled::api::{CKKSAddOps, CKKSDotProductOps},
 };
-use poulpy_core::layouts::LWEInfos;
-use poulpy_core::layouts::{Base2K, Degree, TorusPrecision};
+use poulpy_core::layouts::{Base2K, Degree, LWEInfos, TorusPrecision};
 use poulpy_hal::{
     api::ScratchOwnedBorrow,
     layouts::{HostBytesBackend, Module},
@@ -56,16 +55,16 @@ pub fn test_add_pt_vec_znx_alignment_error<BE: Backend, F: TestScalar>(ctx: &Tes
     let pt_znx = ctx.host_module.ckks_pt_vec_znx_alloc(ctx.base2k(), ctx.meta());
     let err = ctx
         .module
-        .ckks_add_pt_vec_znx_assign(&mut ct, &pt_znx, &mut scratch.borrow())
+        .ckks_add_pt_vec_assign(&mut ct, &pt_znx, &mut scratch.borrow())
         .unwrap_err();
     assert_ckks_error(
         "add_pt_vec_znx_alignment",
         &err,
         CKKSCompositionError::PlaintextAlignmentImpossible {
-            op: "ckks_add_pt_vec_znx_into",
+            op: "ckks_add_pt_vec",
             ct_log_budget: 0,
             pt_log_delta: ctx.meta().log_delta,
-            pt_max_k: pt_znx.max_k().as_usize(),
+            pt_k: pt_znx.max_k().as_usize(),
         },
     );
 }

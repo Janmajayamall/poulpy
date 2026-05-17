@@ -10,9 +10,8 @@ use crate::{
     ScratchArenaTakeCore,
     encryption::DEFAULT_SIGMA_XE,
     layouts::{
-        GGLWEToGGSWKey, GGLWEToGGSWKeyLayout, GGLWEToGGSWKeyPreparedFactory, GGSW, GGSWInfos, GGSWLayout, GGSWToBackendMut,
-        GLWEAutomorphismKey, GLWEAutomorphismKeyPreparedFactory, GLWEInfos, GLWESecret, GLWESecretPreparedFactory,
-        ModuleCoreAlloc,
+        GGLWEToGGSWKey, GGLWEToGGSWKeyLayout, GGLWEToGGSWKeyPreparedFactory, GGSW, GGSWInfos, GGSWLayout, GLWEAutomorphismKey,
+        GLWEAutomorphismKeyPreparedFactory, GLWEInfos, GLWESecret, GLWESecretPreparedFactory, ModuleCoreAlloc,
         prepared::{GGLWEToGGSWKeyPrepared, GLWEAutomorphismKeyPrepared, GLWESecretPrepared},
     },
     noise::noise_ggsw_keyswitch,
@@ -169,17 +168,7 @@ where
             module.gglwe_to_ggsw_key_prepare(&mut tsk_prepared, &tsk, &mut scratch.borrow());
 
             let mut ct_out = upload_ggsw(module, &ct_out_template);
-            {
-                let mut ct_out_backend = <GGSW<BE::OwnedBuf> as GGSWToBackendMut<BE>>::to_backend_mut(&mut ct_out);
-                let ct_in_backend = <GGSW<BE::OwnedBuf> as crate::layouts::GGSWToBackendRef<BE>>::to_backend_ref(&ct_in);
-                module.ggsw_automorphism(
-                    &mut ct_out_backend,
-                    &ct_in_backend,
-                    &auto_key_prepared,
-                    &tsk_prepared,
-                    &mut scratch.borrow(),
-                );
-            }
+            module.ggsw_automorphism(&mut ct_out, &ct_in, &auto_key_prepared, &tsk_prepared, &mut scratch.borrow());
 
             {
                 let mut pt_scalar_backend_as_vec =
@@ -358,10 +347,7 @@ where
                 module.gglwe_to_ggsw_key_prepared_alloc_from_infos(&tsk);
             module.gglwe_to_ggsw_key_prepare(&mut tsk_prepared, &tsk, &mut scratch.borrow());
 
-            {
-                let mut ct_backend = <GGSW<BE::OwnedBuf> as GGSWToBackendMut<BE>>::to_backend_mut(&mut ct);
-                module.ggsw_automorphism_assign(&mut ct_backend, &auto_key_prepared, &tsk_prepared, &mut scratch.borrow());
-            }
+            module.ggsw_automorphism_assign(&mut ct, &auto_key_prepared, &tsk_prepared, &mut scratch.borrow());
 
             {
                 let mut pt_scalar_backend_as_vec =

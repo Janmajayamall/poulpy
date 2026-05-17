@@ -33,7 +33,7 @@ pub fn vec_znx_fill_normal_ref<'r, BE>(
     let (limb, scale) = noise_infos.target_limb_and_scale(base2k);
     znx_fill_normal_f64_ref(
         res.at_mut(res_col, limb),
-        noise_infos.sigma * scale,
+        noise_infos.sigma / scale,
         noise_infos.bound * scale,
         source,
     )

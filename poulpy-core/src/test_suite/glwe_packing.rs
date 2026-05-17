@@ -13,7 +13,7 @@ use crate::{
     ScratchArenaTakeCore,
     layouts::{
         GLWE, GLWEAutomorphismKey, GLWEAutomorphismKeyLayout, GLWEAutomorphismKeyPreparedFactory, GLWELayout, GLWEPlaintext,
-        GLWESecret, GLWESecretPreparedFactory, GLWEToBackendMut, ModuleCoreAlloc,
+        GLWESecret, GLWESecretPreparedFactory, ModuleCoreAlloc,
         prepared::{GLWEAutomorphismKeyPrepared, GLWESecretPrepared},
     },
 };
@@ -123,10 +123,7 @@ where
                 &mut source_xa,
                 &mut scratch.borrow(),
             );
-            {
-                let mut pt_backend = <GLWEPlaintext<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut pt);
-                module.glwe_rotate_assign(-5, &mut pt_backend, &mut scratch.borrow()); // X^-batch * pt
-            }
+            module.glwe_rotate_assign(-5, &mut pt, &mut scratch.borrow());
             ct
         })
         .collect_vec();

@@ -1,8 +1,12 @@
 use anyhow::Result;
-use poulpy_core::{GLWECopy, GLWEShift, ScratchArenaTakeCore, layouts::LWEInfos};
+use poulpy_core::layouts::GLWEToBackendMut;
+use poulpy_core::{
+    GLWECopy, GLWEShift, ScratchArenaTakeCore,
+    layouts::{GLWEInfos, LWEInfos},
+};
 use poulpy_hal::layouts::{Backend, Module, ScratchArena};
 
-use crate::{CKKSCiphertextToBackendMut, CKKSCiphertextToBackendRef};
+use crate::GLWEToBackendRef;
 
 use crate::{CKKSInfos, SetCKKSInfos, checked_log_budget_sub, ckks_offset_unary};
 
@@ -30,8 +34,8 @@ pub(crate) trait CKKSPow2Default<BE: Backend> {
     ) -> Result<()>
     where
         Self: GLWEShift<BE>,
-        Dst: CKKSCiphertextToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
-        Src: CKKSCiphertextToBackendRef<BE> + LWEInfos + CKKSInfos,
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
+        Src: GLWEToBackendRef<BE> + GLWEInfos + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
     {
         let offset = ckks_offset_unary(dst, src);
@@ -44,7 +48,7 @@ pub(crate) trait CKKSPow2Default<BE: Backend> {
     fn ckks_mul_pow2_assign_default<Dst>(&self, dst: &mut Dst, bits: usize, scratch: &mut ScratchArena<'_, BE>) -> Result<()>
     where
         Self: GLWEShift<BE>,
-        Dst: CKKSCiphertextToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
     {
         self.glwe_lsh_assign(dst, bits, scratch);
@@ -60,8 +64,8 @@ pub(crate) trait CKKSPow2Default<BE: Backend> {
     ) -> Result<()>
     where
         Self: GLWEShift<BE> + GLWECopy<BE>,
-        Dst: CKKSCiphertextToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
-        Src: CKKSCiphertextToBackendRef<BE> + LWEInfos + CKKSInfos,
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
+        Src: GLWEToBackendRef<BE> + GLWEInfos + LWEInfos + CKKSInfos,
         for<'a> ScratchArena<'a, BE>: ScratchArenaTakeCore<'a, BE>,
     {
         let offset = ckks_offset_unary(dst, src);
@@ -74,7 +78,7 @@ pub(crate) trait CKKSPow2Default<BE: Backend> {
 
     fn ckks_div_pow2_assign_default<Dst>(&self, dst: &mut Dst, bits: usize) -> Result<()>
     where
-        Dst: CKKSCiphertextToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
+        Dst: GLWEToBackendMut<BE> + LWEInfos + CKKSInfos + SetCKKSInfos,
     {
         dst.set_log_budget(checked_log_budget_sub("div_pow2_assign", dst.log_budget(), bits)?);
         Ok(())

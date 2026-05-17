@@ -59,6 +59,10 @@ pub fn criterion_config() -> criterion::Criterion {
         .measurement_time(std::time::Duration::from_secs(5))
 }
 
+pub fn ckks_criterion_config() -> criterion::Criterion {
+    criterion_config()
+}
+
 pub fn upload_host_vec_znx<BE: Backend>(src: &VecZnx<Vec<u8>>) -> VecZnx<BE::OwnedBuf> {
     VecZnx::from_data_with_max_size(
         BE::from_host_bytes(src.data()),

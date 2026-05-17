@@ -8,18 +8,15 @@ use poulpy_hal::{
     },
     layouts::{
         Backend, Data, HostDataMut, HostDataRef, Module, ScratchArena, SvpPPolOwned, SvpPPolToBackendRef, VecZnx,
-        VecZnxDftReborrowBackendMut, VecZnxDftReborrowBackendRef, VecZnxToBackendRef, VmpPMatToBackendRef, ZnxView, ZnxViewMut,
-        ZnxZero, vec_znx_backend_ref_from_mut, vec_znx_big_backend_ref_from_mut, vec_znx_dft_backend_ref_from_mut,
+        VecZnxDftToBackendMut, VecZnxDftToBackendRef, VecZnxToBackendRef, VmpPMatToBackendRef, ZnxView, ZnxViewMut, ZnxZero,
+        vec_znx_backend_ref_from_mut, vec_znx_big_backend_ref_from_mut, vec_znx_dft_backend_ref_from_mut,
     },
     oep::HalVecZnxImpl,
 };
 
 use poulpy_core::{
     Distribution, GLWEAdd, GLWECopy, GLWEExternalProduct, GLWEMulXpMinusOne, GLWENormalize, ScratchArenaTakeCore,
-    layouts::{
-        GGSWInfos, GLWE, GLWEInfos, GLWEToBackendMut, GLWEToBackendRef, LWE, LWEInfos, LWEToBackendRef, ModuleCoreAlloc,
-        glwe_backend_ref_from_mut,
-    },
+    layouts::{GGSWInfos, GLWE, GLWEInfos, GLWEToBackendMut, LWE, LWEInfos, LWEToBackendRef, ModuleCoreAlloc},
 };
 
 use crate::blind_rotation::{
@@ -47,6 +44,7 @@ where
         + VecZnxBigNormalize<BE>
         + GLWEMulXpMinusOne<BE>
         + GLWEAdd<BE>
+        + GLWECopy<BE>
         + GLWENormalize<BE>
         + VecZnxZeroBackend<BE>,
     // TODO(device): CGGI blind rotation still contains host-visible sub-steps
@@ -56,7 +54,6 @@ where
     for<'a> BE::BufMut<'a>: HostDataMut,
     for<'a> BE::BufRef<'a>: HostDataRef,
     for<'a> BE::OwnedBuf: HostDataRef,
-    for<'a> BE: Backend<BufMut<'a> = &'a mut [u8], BufRef<'a> = &'a [u8]>,
     BE: HalVecZnxImpl<BE>,
 {
     fn blind_rotation_execute_tmp_bytes<G, B>(
@@ -141,7 +138,7 @@ where
     }
 }
 
-fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
+fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>> + 'static>(
     module: &M,
     res: &mut R,
     lwe: &LWE<DataIn>,
@@ -181,11 +178,11 @@ fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
     let cols: usize = (res.rank() + 1).into();
 
     let scratch = scratch.borrow();
-    let (mut acc, scratch_1) = scratch.take_vec_znx_slice(extension_factor, n_glwe, cols, res.size());
-    let (mut acc_dft, scratch_2) = scratch_1.take_vec_znx_dft_slice(module, extension_factor, cols, dnum);
-    let (mut vmp_res, scratch_3) = scratch_2.take_vec_znx_dft_slice(module, extension_factor, cols, brk.size());
-    let (mut acc_add_dft, scratch_4) = scratch_3.take_vec_znx_dft_slice(module, extension_factor, cols, brk.size());
-    let (mut vmp_xai, mut scratch_5) = scratch_4.take_vec_znx_dft(module, 1, brk.size());
+    let (mut acc, scratch_1) = scratch.take_vec_znx_slice_scratch(extension_factor, n_glwe, cols, res.size());
+    let (mut acc_dft, scratch_2) = scratch_1.take_vec_znx_dft_slice_scratch(module, extension_factor, cols, dnum);
+    let (mut vmp_res, scratch_3) = scratch_2.take_vec_znx_dft_slice_scratch(module, extension_factor, cols, brk.size());
+    let (mut acc_add_dft, scratch_4) = scratch_3.take_vec_znx_dft_slice_scratch(module, extension_factor, cols, brk.size());
+    let (mut vmp_xai, mut scratch_5) = scratch_4.take_vec_znx_dft_scratch(module, 1, brk.size());
 
     (0..extension_factor).for_each(|i| {
         acc[i].zero();
@@ -243,10 +240,9 @@ fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
             for i in 0..extension_factor {
                 let skii_ref = skii.data().to_backend_ref();
                 scratch_5.scope(|mut scratch_local| {
-                    let mut vmp_res_i = &mut vmp_res[i];
                     module.vmp_apply_dft_to_dft(
-                        &mut vmp_res_i,
-                        &acc_dft[i].reborrow_backend_ref(),
+                        &mut vmp_res[i],
+                        &vec_znx_dft_backend_ref_from_mut::<BE>(&acc_dft[i]),
                         &skii_ref,
                         0,
                         &mut scratch_local,
@@ -264,7 +260,7 @@ fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
                             let x_pow_a_ref = x_pow_a[ai_hi].to_backend_ref();
                             let vmp_res_j_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&vmp_res[j]);
                             {
-                                let mut vmp_xai_backend = vmp_xai.reborrow_backend_mut();
+                                let mut vmp_xai_backend = vmp_xai.to_backend_mut();
                                 module.svp_apply_dft_to_dft(&mut vmp_xai_backend, 0, &x_pow_a_ref, 0, &vmp_res_j_ref, i);
                             }
                             let vmp_res_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&vmp_res[j]);
@@ -287,7 +283,7 @@ fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
                             let x_pow_a_ref = x_pow_a[ai_hi + 1].to_backend_ref();
                             let vmp_res_j_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&vmp_res[j]);
                             {
-                                let mut vmp_xai_backend = vmp_xai.reborrow_backend_mut();
+                                let mut vmp_xai_backend = vmp_xai.to_backend_mut();
                                 module.svp_apply_dft_to_dft(&mut vmp_xai_backend, 0, &x_pow_a_ref, 0, &vmp_res_j_ref, k);
                             }
                             let vmp_xai_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&vmp_xai);
@@ -306,7 +302,7 @@ fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
                             let x_pow_a_ref = x_pow_a[ai_hi].to_backend_ref();
                             let vmp_res_j_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&vmp_res[j]);
                             {
-                                let mut vmp_xai_backend = vmp_xai.reborrow_backend_mut();
+                                let mut vmp_xai_backend = vmp_xai.to_backend_mut();
                                 module.svp_apply_dft_to_dft(&mut vmp_xai_backend, 0, &x_pow_a_ref, 0, &vmp_res_j_ref, k);
                             }
                             let vmp_xai_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&vmp_xai);
@@ -320,7 +316,7 @@ fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
         }
 
         scratch_5.scope(|scratch_local| {
-            let (mut acc_add_big, mut scratch7) = scratch_local.take_vec_znx_big(module, 1, brk.size());
+            let (mut acc_add_big, mut scratch7) = scratch_local.take_vec_znx_big_scratch(module, 1, brk.size());
 
             for j in 0..extension_factor {
                 for i in 0..cols {
@@ -350,7 +346,7 @@ fn execute_block_binary_extended<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
     }
 }
 
-fn execute_block_binary<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
+fn execute_block_binary<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>> + 'static>(
     module: &M,
     res: &mut R,
     lwe: &LWE<DataIn>,
@@ -412,10 +408,10 @@ fn execute_block_binary<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
     // ACC + [sum DFT(X^ai -1) * (DFT(ACC) x BRKi)]
 
     let scratch = scratch.borrow();
-    let (mut acc_dft, scratch_1) = scratch.take_vec_znx_dft(module, cols, dnum);
-    let (mut vmp_res, scratch_2) = scratch_1.take_vec_znx_dft(module, cols, brk.size());
-    let (mut acc_add_dft, scratch_3) = scratch_2.take_vec_znx_dft(module, cols, brk.size());
-    let (mut vmp_xai, mut scratch_4) = scratch_3.take_vec_znx_dft(module, 1, brk.size());
+    let (mut acc_dft, scratch_1) = scratch.take_vec_znx_dft_scratch(module, cols, dnum);
+    let (mut vmp_res, scratch_2) = scratch_1.take_vec_znx_dft_scratch(module, cols, brk.size());
+    let (mut acc_add_dft, scratch_3) = scratch_2.take_vec_znx_dft_scratch(module, cols, brk.size());
+    let (mut vmp_xai, mut scratch_4) = scratch_3.take_vec_znx_dft_scratch(module, 1, brk.size());
 
     let x_pow_a: &Vec<SvpPPolOwned<BE>>;
     if let Some(b) = &brk.x_pow_a {
@@ -436,21 +432,14 @@ fn execute_block_binary<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
 
             // vmp_res = DFT(acc) * BRK[i]
             let skii_ref = skii.data().to_backend_ref();
-            let mut vmp_res_backend = &mut vmp_res;
-            module.vmp_apply_dft_to_dft(
-                &mut vmp_res_backend,
-                &acc_dft.reborrow_backend_ref(),
-                &skii_ref,
-                0,
-                &mut scratch_4.borrow(),
-            );
+            module.vmp_apply_dft_to_dft(&mut vmp_res, &acc_dft.to_backend_ref(), &skii_ref, 0, &mut scratch_4.borrow());
 
             // DFT(X^ai -1) * (DFT(acc) * BRK[i])
             for i in 0..cols {
                 let x_pow_a_ref = x_pow_a[ai_pos].to_backend_ref();
                 let vmp_res_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&vmp_res);
                 {
-                    let mut vmp_xai_backend = vmp_xai.reborrow_backend_mut();
+                    let mut vmp_xai_backend = vmp_xai.to_backend_mut();
                     module.svp_apply_dft_to_dft(&mut vmp_xai_backend, 0, &x_pow_a_ref, 0, &vmp_res_ref, i);
                 }
                 let vmp_res_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&vmp_res);
@@ -461,7 +450,7 @@ fn execute_block_binary<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
         }
 
         {
-            let (mut acc_add_big, mut scratch_5) = scratch_4.borrow().take_vec_znx_big(module, 1, brk.size());
+            let (mut acc_add_big, mut scratch_5) = scratch_4.borrow().take_vec_znx_big_scratch(module, 1, brk.size());
 
             for i in 0..cols {
                 let acc_add_dft_ref = vec_znx_dft_backend_ref_from_mut::<BE>(&acc_add_dft);
@@ -488,10 +477,7 @@ fn execute_block_binary<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
             }
         }
     }
-    module.glwe_copy(
-        &mut res.to_backend_mut(),
-        &<GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&out_tmp),
-    );
+    module.glwe_copy(res, &out_tmp);
 }
 
 fn execute_standard<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
@@ -547,10 +533,7 @@ fn execute_standard<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
 
     let mut lwe_2n: Vec<i64> = vec![0i64; (lwe.n() + 1).into()]; // TODO: from scratch space
     let mut out_tmp: GLWE<Vec<u8>> = module.glwe_alloc_from_infos(res);
-    module.glwe_copy(
-        &mut <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut out_tmp),
-        &res.to_backend_ref(),
-    );
+    module.glwe_copy(&mut out_tmp, res);
 
     mod_switch_2n::<BE, _>(2 * lut.domain_size(), &mut lwe_2n, lwe, lut.rotation_direction());
 
@@ -569,36 +552,27 @@ fn execute_standard<R, DataIn, M, BE: Backend<OwnedBuf = Vec<u8>>>(
 
     // ACC + [sum DFT(X^ai -1) * (DFT(ACC) x BRKi)]
     let scratch = scratch.borrow();
-    let (mut acc_tmp, mut scratch_1) = scratch.take_glwe(&out_tmp);
+    let (mut acc_tmp, mut scratch_1) = scratch.take_glwe_scratch(&out_tmp);
 
     // TODO: see if faster by skipping normalization in external product and keeping acc in big coeffs
     // TODO: first iteration can be optimized to be a gglwe product
     for (ai, ski) in izip!(a.iter(), brk.data.iter()) {
         // acc_tmp = sk[i] * acc
         {
-            let out_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut out_tmp);
-            let out_backend_ref = glwe_backend_ref_from_mut::<BE>(&out_backend);
-            module.glwe_external_product(&mut acc_tmp, &out_backend_ref, ski, &mut scratch_1.borrow());
+            module.glwe_external_product(&mut acc_tmp, &out_tmp, ski, &mut scratch_1.borrow());
         }
 
         // acc_tmp = (sk[i] * acc) * (X^{ai} - 1)
-        let mut acc_tmp_ref = &mut acc_tmp;
-        module.glwe_mul_xp_minus_one_assign(*ai, &mut acc_tmp_ref, &mut scratch_1.borrow());
+        module.glwe_mul_xp_minus_one_assign(*ai, &mut acc_tmp, &mut scratch_1.borrow());
 
         // acc = acc + (sk[i] * acc) * (X^{ai} - 1)
-        let mut out_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut out_tmp);
-        let acc_tmp_ref = glwe_backend_ref_from_mut::<BE>(&acc_tmp);
-        module.glwe_add_assign_backend(&mut out_backend, &acc_tmp_ref);
+        module.glwe_add_assign(&mut out_tmp, &acc_tmp);
     }
 
     // We can normalize only at the end because we add normalized values in [-2^{base2k-1}, 2^{base2k-1}]
     // on top of each others, thus ~ 2^{63-base2k} additions are supported before overflow.
     {
-        let mut out_backend = <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut out_tmp);
-        module.glwe_normalize_assign(&mut out_backend, &mut scratch_1.borrow());
+        module.glwe_normalize_assign(&mut out_tmp, &mut scratch_1.borrow());
     }
-    module.glwe_copy(
-        &mut res.to_backend_mut(),
-        &<GLWE<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&out_tmp),
-    );
+    module.glwe_copy(res, &out_tmp);
 }

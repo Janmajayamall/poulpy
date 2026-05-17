@@ -39,13 +39,43 @@ impl<D: Data, B: Backend> LWEInfos for GGSWPrepared<D, B> {
     }
 }
 
+impl<D: Data, B: Backend> LWEInfos for &GGSWPrepared<D, B> {
+    fn n(&self) -> Degree {
+        Degree(self.data.n() as u32)
+    }
+
+    fn base2k(&self) -> Base2K {
+        self.base2k
+    }
+
+    fn size(&self) -> usize {
+        self.data.size()
+    }
+}
+
 impl<D: Data, B: Backend> GLWEInfos for GGSWPrepared<D, B> {
     fn rank(&self) -> Rank {
         Rank(self.data.cols_out() as u32 - 1)
     }
 }
 
+impl<D: Data, B: Backend> GLWEInfos for &GGSWPrepared<D, B> {
+    fn rank(&self) -> Rank {
+        Rank(self.data.cols_out() as u32 - 1)
+    }
+}
+
 impl<D: Data, B: Backend> GGSWInfos for GGSWPrepared<D, B> {
+    fn dsize(&self) -> Dsize {
+        self.dsize
+    }
+
+    fn dnum(&self) -> Dnum {
+        Dnum(self.data.rows() as u32)
+    }
+}
+
+impl<D: Data, B: Backend> GGSWInfos for &GGSWPrepared<D, B> {
     fn dsize(&self) -> Dsize {
         self.dsize
     }

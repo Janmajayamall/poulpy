@@ -14,7 +14,6 @@
 
 use super::helpers::{TestCiphertextBackend as Backend, TestContext, TestScalar, assert_ckks_error, assert_ct_meta};
 use crate::{CKKSCompositionError, CKKSInfos, CKKSMeta, layouts::CKKSModuleAlloc, leveled::api::CKKSDecrypt};
-use poulpy_core::layouts::LWEInfos;
 use poulpy_hal::api::ScratchOwnedBorrow;
 
 fn extract_src_prec<BE: Backend, F: TestScalar>(ctx: &TestContext<BE, F>) -> CKKSMeta {
@@ -143,7 +142,7 @@ pub fn test_decrypt_extract_output_hom_rem_too_large<BE: Backend, F: TestScalar>
             op: "ckks_extract_pt_znx",
             ct_log_budget: src_prec.log_budget,
             pt_log_delta: src_prec.log_delta,
-            pt_max_k: pt.max_k().as_usize(),
+            pt_k: pt.effective_k(),
         },
     );
 }

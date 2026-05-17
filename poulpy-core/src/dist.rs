@@ -75,14 +75,14 @@ impl Distribution {
     /// in the freed top byte.
     #[inline]
     fn pack_f64(tag: u8, p: f64) -> u64 {
-        (tag as u64) << 56 | (p.to_bits() >> 8)
+        (tag as u64) << 56 | (p.to_bits() >> 9)
     }
 
     /// Unpacks a tag-stripped 56-bit payload back into an f64
     /// by shifting left by 8 (the 8 LSB mantissa bits become zero).
     #[inline]
     fn unpack_f64(payload: u64) -> f64 {
-        f64::from_bits(payload << 8)
+        f64::from_bits(payload << 9)
     }
 
     /// Serialises this distribution as a single little-endian `u64` word.

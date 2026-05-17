@@ -34,32 +34,18 @@ macro_rules! hal_impl_vmp {
 
             scratch.consume(|scratch| {
                 let (mut a_dft, mut scratch) =
-                    poulpy_hal::api::ScratchArenaTakeBasic::take_vec_znx_dft(scratch, module, b.cols_in(), a_dft_size);
+                    poulpy_hal::api::ScratchArenaTakeBasic::take_vec_znx_dft_scratch(scratch, module, b.cols_in(), a_dft_size);
 
                 for j in 0..offset {
-                    <Module<Self> as VecZnxDftZero<Self>>::vec_znx_dft_zero(module, &mut a_dft, j);
+                    module.vec_znx_dft_zero(&mut a_dft, j);
                 }
 
                 for j in 0..cols_to_copy {
-                    <Module<Self> as VecZnxDftApply<Self>>::vec_znx_dft_apply(
-                        module,
-                        1,
-                        0,
-                        &mut a_dft,
-                        offset + j,
-                        a,
-                        a_start_col + j,
-                    );
+                    module.vec_znx_dft_apply(1, 0, &mut a_dft, offset + j, a, a_start_col + j);
                 }
 
-                <Module<Self> as VmpApplyDftToDft<Self>>::vmp_apply_dft_to_dft(
-                    module,
-                    res,
-                    &poulpy_hal::layouts::VecZnxDftReborrowBackendRef::reborrow_backend_ref(&a_dft),
-                    b,
-                    0,
-                    &mut scratch,
-                );
+                let mut res_ref = res.to_backend_mut();
+                module.vmp_apply_dft_to_dft(&mut res_ref, &a_dft.to_backend_ref(), b, 0, &mut scratch);
                 ((), scratch)
             })
         }
@@ -92,31 +78,16 @@ macro_rules! hal_impl_vmp {
             )
         }
 
-        fn vmp_apply_dft_to_dft<'s, R>(
-            module: &Module<Self>,
-            res: &mut R,
-            a: &poulpy_hal::layouts::VecZnxDftBackendRef<'_, Self>,
-            b: &poulpy_hal::layouts::VmpPMatBackendRef<'_, Self>,
-            limb_offset: usize,
-            scratch: &mut poulpy_hal::layouts::ScratchArena<'s, Self>,
-        ) where
-            R: VecZnxDftToBackendMut<Self>,
-        {
-            let mut scratch = scratch.borrow();
-            let mut res_ref = res.to_backend_mut();
-            <Self as $defaults<Self>>::vmp_apply_dft_to_dft_default(module, &mut res_ref, a, b, limb_offset, &mut scratch);
-        }
-
-        fn vmp_apply_dft_to_dft_backend_ref<'s, 'r, 'a>(
+        fn vmp_apply_dft_to_dft<'s, 'r>(
             module: &Module<Self>,
             res: &mut poulpy_hal::layouts::VecZnxDftBackendMut<'r, Self>,
-            a: &poulpy_hal::layouts::VecZnxDftBackendRef<'a, Self>,
+            a: &poulpy_hal::layouts::VecZnxDftBackendRef<'_, Self>,
             b: &poulpy_hal::layouts::VmpPMatBackendRef<'_, Self>,
             limb_offset: usize,
             scratch: &mut poulpy_hal::layouts::ScratchArena<'s, Self>,
         ) {
             let mut scratch = scratch.borrow();
-            <Self as $defaults<Self>>::vmp_apply_dft_to_dft_backend_ref_default(module, res, a, b, limb_offset, &mut scratch);
+            <Self as $defaults<Self>>::vmp_apply_dft_to_dft_default(module, res, a, b, limb_offset, &mut scratch);
         }
 
         fn vmp_zero(module: &Module<Self>, res: &mut poulpy_hal::layouts::VmpPMatBackendMut<'_, Self>) {

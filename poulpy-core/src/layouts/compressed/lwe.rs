@@ -111,18 +111,18 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 impl<D: HostDataMut> ReaderFrom for LWECompressed<D> {
     fn read_from<R: std::io::Read>(&mut self, reader: &mut R) -> std::io::Result<()> {
-        self.k = TorusPrecision(reader.read_u32::<LittleEndian>()?);
         self.base2k = Base2K(reader.read_u32::<LittleEndian>()?);
-        reader.read_exact(&mut self.seed)?;
+        self.k = TorusPrecision(reader.read_u32::<LittleEndian>()?);
+        reader.read_exact(&mut self.seed[..16])?;
         self.data.read_from(reader)
     }
 }
 
 impl<D: HostDataRef> WriterTo for LWECompressed<D> {
     fn write_to<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        writer.write_u32::<LittleEndian>(self.k.into())?;
         writer.write_u32::<LittleEndian>(self.base2k.into())?;
-        writer.write_all(&self.seed)?;
+        writer.write_u32::<LittleEndian>(self.k.into())?;
+        writer.write_all(&self.seed[..16])?;
         self.data.write_to(writer)
     }
 }

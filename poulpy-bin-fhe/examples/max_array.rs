@@ -12,8 +12,7 @@ use poulpy_core::{
     EncryptionLayout, GLWECopy, GLWEDecrypt, GLWEEncryptSk, GLWEExternalProduct, LWEEncryptSk, ScratchArenaTakeCore,
     layouts::{
         Base2K, Degree, Dnum, Dsize, GGLWEToGGSWKeyLayout, GGSWLayout, GGSWPreparedFactory, GLWEAutomorphismKeyLayout,
-        GLWELayout, GLWESecretPreparedFactory, GLWESwitchingKeyLayout, GLWEToBackendMut, GLWEToBackendRef, GLWEToLWEKeyLayout,
-        ModuleCoreAlloc, Rank, TorusPrecision,
+        GLWELayout, GLWESecretPreparedFactory, GLWESwitchingKeyLayout, GLWEToLWEKeyLayout, ModuleCoreAlloc, Rank, TorusPrecision,
     },
 };
 use poulpy_hal::{
@@ -233,10 +232,7 @@ where
 
         compare_enc_prepared.prepare(&module, &compare_enc, &bdd_key_prepared, &mut scratch.borrow());
 
-        module.glwe_copy(
-            &mut <FheUint<Vec<u8>, u32> as GLWEToBackendMut<BE>>::to_backend_mut(&mut max_enc_copy),
-            &<FheUint<Vec<u8>, u32> as GLWEToBackendRef<BE>>::to_backend_ref(&max_enc),
-        );
+        module.glwe_copy(&mut max_enc_copy, &max_enc);
 
         let cts = HashMap::from([(0, input_i), (1, &mut max_enc_copy)]);
 

@@ -73,8 +73,6 @@ pub trait BlindRotationExecute<BRA: BlindRotationAlgo, BE: Backend> {
         brk: &BlindRotationKeyPrepared<BE::OwnedBuf, BRA, BE>,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        // TODO: drop `GLWEToBackendMut` once blind rotation no longer relies on
-        // host-visible GLWE staging for the standard CGGI path.
         R: GLWEToBackendMut<BE> + GLWEInfos,
         DL: Data,
         LWE<DL>: LWEToBackendRef<BE>,

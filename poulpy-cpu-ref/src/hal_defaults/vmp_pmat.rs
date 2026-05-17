@@ -120,26 +120,6 @@ where
         fft64_vmp_apply_dft_to_dft(res, a, b, limb_offset, tmp);
     }
 
-    fn vmp_apply_dft_to_dft_backend_ref_default<'s, 'r, 'a, 'b>(
-        _module: &Module<BE>,
-        res: &mut VecZnxDftBackendMut<'r, BE>,
-        a: &VecZnxDftBackendRef<'a, BE>,
-        b: &VmpPMatBackendRef<'b, BE>,
-        limb_offset: usize,
-        scratch: &'s mut ScratchArena<'s, BE>,
-    ) where
-        BE: 's,
-        BE: 'b,
-        BE: Backend<ScalarPrep = f64> + ReimArith + Reim4BlkMatVec,
-        for<'x> <BE as Backend>::BufMut<'x>: HostDataMut,
-        for<'x> <BE as Backend>::BufRef<'x>: HostDataRef,
-        BE::BufMut<'s>: HostBufMut<'s>,
-    {
-        let bytes = fft64_vmp_apply_dft_to_dft_tmp_bytes(a.size(), b.rows(), b.cols_in());
-        let (tmp, _) = take_host_typed::<BE, f64>(scratch.borrow(), bytes / size_of::<f64>());
-        fft64_vmp_apply_dft_to_dft(res, a, b, limb_offset, tmp);
-    }
-
     fn vmp_zero_default(_module: &Module<BE>, res: &mut VmpPMatBackendMut<'_, BE>)
     where
         BE: Backend<ScalarPrep = f64>,
@@ -208,27 +188,6 @@ where
         module: &Module<BE>,
         res: &mut VecZnxDftBackendMut<'_, BE>,
         a: &VecZnxDftBackendRef<'_, BE>,
-        b: &VmpPMatBackendRef<'b, BE>,
-        limb_offset: usize,
-        scratch: &'s mut ScratchArena<'s, BE>,
-    ) where
-        Module<BE>: NttModuleHandle,
-        BE: 's,
-        BE: 'b,
-        BE: Backend<ScalarPrep = Q120bScalar> + NttExtract1BlkContiguous + NttMulBbc1ColX2 + NttMulBbc2ColsX2,
-        for<'x> <BE as Backend>::BufMut<'x>: HostDataMut,
-        for<'x> <BE as Backend>::BufRef<'x>: HostDataRef,
-        BE::BufMut<'s>: HostBufMut<'s>,
-    {
-        let bytes = ntt120_vmp_apply_dft_to_dft_tmp_bytes(a.size(), b.rows(), b.cols_in());
-        let (tmp, _) = take_host_typed::<BE, u64>(scratch.borrow(), bytes / size_of::<u64>());
-        ntt120_vmp_apply_dft_to_dft::<BE>(module, res, a, b, limb_offset, tmp);
-    }
-
-    fn vmp_apply_dft_to_dft_backend_ref_default<'s, 'r, 'a, 'b>(
-        module: &Module<BE>,
-        res: &mut VecZnxDftBackendMut<'r, BE>,
-        a: &VecZnxDftBackendRef<'a, BE>,
         b: &VmpPMatBackendRef<'b, BE>,
         limb_offset: usize,
         scratch: &'s mut ScratchArena<'s, BE>,

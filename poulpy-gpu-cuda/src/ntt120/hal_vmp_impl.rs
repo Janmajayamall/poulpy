@@ -274,34 +274,13 @@ unsafe impl HalVmpImpl<CudaNtt120Backend> for CudaNtt120Backend {
         0
     }
 
-    fn vmp_apply_dft_to_dft<'s, R>(
-        module: &Module<CudaNtt120Backend>,
-        res: &mut R,
-        a: &VecZnxDftBackendRef<'_, CudaNtt120Backend>,
-        b: &VmpPMatBackendRef<'_, CudaNtt120Backend>,
-        limb_offset: usize,
-        scratch: &mut ScratchArena<'s, CudaNtt120Backend>,
-    ) where
-        R: VecZnxDftToBackendMut<CudaNtt120Backend>,
-    {
-        let mut res_backend = res.to_backend_mut();
-        <CudaNtt120Backend as HalVmpImpl<CudaNtt120Backend>>::vmp_apply_dft_to_dft_backend_ref(
-            module,
-            &mut res_backend,
-            a,
-            b,
-            limb_offset,
-            scratch,
-        );
-    }
-
     /// Pointwise multiply `a × b[pmat_col_off..]` writing `active_ovs` output
     /// limbs to `res`. Zeros any trailing limbs in `res` that have no matching
     /// pmat column. All operations are async on the per-thread CUDA stream.
-    fn vmp_apply_dft_to_dft_backend_ref<'s, 'r, 'aa>(
+    fn vmp_apply_dft_to_dft<'s, 'r>(
         module: &Module<CudaNtt120Backend>,
         res: &mut VecZnxDftBackendMut<'r, CudaNtt120Backend>,
-        a: &VecZnxDftBackendRef<'aa, CudaNtt120Backend>,
+        a: &VecZnxDftBackendRef<'_, CudaNtt120Backend>,
         b: &VmpPMatBackendRef<'_, CudaNtt120Backend>,
         limb_offset: usize,
         _scratch: &mut ScratchArena<'s, CudaNtt120Backend>,

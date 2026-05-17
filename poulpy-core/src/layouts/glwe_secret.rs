@@ -169,7 +169,7 @@ impl<D: HostDataMut> GLWESecret<D> {
         (0..self.rank().into()).for_each(|i| {
             self.data.fill_ternary_hw(i, hw, source);
         });
-        self.dist = Distribution::TernaryFixed(hw);
+        self.dist = Distribution::BinaryFixed(hw);
     }
 
     pub fn fill_binary_prob(&mut self, prob: f64, source: &mut Source) {

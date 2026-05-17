@@ -9,7 +9,7 @@ where
     B: Backend + HalModuleImpl<B>,
 {
     fn new(n: u64) -> Self {
-        <B as HalModuleImpl<B>>::new(n)
+        B::new(n)
     }
 }
 

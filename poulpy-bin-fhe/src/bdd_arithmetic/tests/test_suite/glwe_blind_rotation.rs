@@ -2,7 +2,7 @@ use poulpy_core::{
     EncryptionLayout, GGSWEncryptSk, GLWEDecrypt, GLWEEncryptSk,
     layouts::{
         Base2K, Dnum, Dsize, GGSWLayout, GGSWPreparedFactory, GLWE, GLWELayout, GLWEPlaintext, GLWESecretPrepared,
-        GLWESecretPreparedFactory, GLWEToBackendMut, GLWEToBackendRef, ModuleCoreAlloc, Rank, TorusPrecision,
+        GLWESecretPreparedFactory, ModuleCoreAlloc, Rank, TorusPrecision,
     },
 };
 use poulpy_hal::{
@@ -110,8 +110,8 @@ where
             let bit_size: usize = (32 - bit_start).min(digit);
 
             module.glwe_blind_rotation(
-                &mut <GLWE<Vec<u8>> as GLWEToBackendMut<BE>>::to_backend_mut(&mut res),
-                &<GLWEPlaintext<Vec<u8>> as GLWEToBackendRef<BE>>::to_backend_ref(&test_glwe),
+                &mut res,
+                &test_glwe,
                 &k_enc_prep,
                 false,
                 bit_start,

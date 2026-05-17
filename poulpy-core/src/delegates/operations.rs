@@ -1,27 +1,25 @@
 use std::collections::HashMap;
 
-use poulpy_hal::layouts::{Backend, Data, Module, ScratchArena};
+use poulpy_hal::layouts::{Backend, Module, ScratchArena};
 
 use crate::{
     api::{
-        GGSWRotate, GLWEMulConst, GLWEMulPlain, GLWEMulXpMinusOne, GLWENormalize, GLWEPackerOps, GLWEPacking, GLWERotate,
-        GLWEShift, GLWETensoring, GLWETrace,
+        GGSWRotate, GLWEAdd, GLWECopy, GLWEMulConst, GLWEMulPlain, GLWEMulXpMinusOne, GLWENegate, GLWENormalize, GLWEPacking,
+        GLWERotate, GLWEShift, GLWESub, GLWETensoring, GLWETrace,
     },
-    glwe_packer::GLWEPackerOpsDefault,
-    glwe_packing::GLWEPackingDefault,
-    glwe_trace::GLWETraceDefault,
+    default::{glwe_packing::GLWEPackingDefault, glwe_trace::GLWETraceDefault},
     layouts::{
-        GGLWEInfos, GLWE, GLWEAutomorphismKeyHelper, GLWEBackendMut, GLWEBackendRef, GLWEInfos, GLWEPlaintext, GLWETensor,
-        GLWEToBackendMut, GetGaloisElement,
+        GGLWEInfos, GGSWInfos, GGSWToBackendMut, GGSWToBackendRef, GLWEAutomorphismKeyHelper, GLWEBackendMut, GLWEBackendRef,
+        GLWEInfos, GLWEScratchMut, GLWEToBackendMut, GLWEToBackendRef, GetGaloisElement,
         prepared::{GGLWEPreparedToBackendRef, GLWETensorKeyPreparedToBackendRef},
     },
     oep::{
-        GGSWRotateImpl, GLWEMulConstImpl, GLWEMulPlainImpl, GLWEMulXpMinusOneImpl, GLWENormalizeImpl, GLWEPackImpl,
-        GLWERotateImpl, GLWEShiftImpl, GLWETensoringImpl, GLWETraceImpl,
+        GGSWRotateImpl, GLWEAddImpl, GLWECopyImpl, GLWEMulConstImpl, GLWEMulPlainImpl, GLWEMulXpMinusOneImpl, GLWENegateImpl,
+        GLWENormalizeImpl, GLWEPackImpl, GLWERotateImpl, GLWEShiftImpl, GLWESubImpl, GLWETensoringImpl, GLWETraceImpl,
     },
     operations::{
-        GGSWRotateDefault, GLWEMulConstDefault, GLWEMulPlainDefault, GLWEMulXpMinusOneDefault, GLWENormalizeDefault,
-        GLWERotateDefault, GLWEShiftDefault, GLWETensoringDefault,
+        GGSWRotateDefault, GLWEAddDefault, GLWECopyDefault, GLWEMulConstDefault, GLWEMulPlainDefault, GLWEMulXpMinusOneDefault,
+        GLWENegateDefault, GLWENormalizeDefault, GLWERotateDefault, GLWEShiftDefault, GLWESubDefault, GLWETensoringDefault,
     },
 };
 
@@ -38,6 +36,87 @@ macro_rules! impl_operations_delegate {
 }
 
 impl_operations_delegate!(
+    GLWEAdd<BE>,
+    GLWEAddImpl<BE>,
+    GLWEAddDefault<BE>,
+    fn glwe_add_into<R, A, B>(&self, res: &mut R, a: &A, b: &B)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
+        B: GLWEToBackendRef<BE>,
+    {
+        BE::glwe_add_into(self, res, a, b)
+    },
+    fn glwe_add_assign<R, A>(&self, res: &mut R, a: &A)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
+    {
+        BE::glwe_add_assign(self, res, a)
+    }
+);
+
+impl_operations_delegate!(
+    GLWENegate<BE>,
+    GLWENegateImpl<BE>,
+    GLWENegateDefault<BE>,
+    fn glwe_negate<R, A>(&self, res: &mut R, a: &A)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
+    {
+        BE::glwe_negate(self, res, a)
+    },
+    fn glwe_negate_assign<R>(&self, res: &mut R)
+    where
+        R: GLWEToBackendMut<BE>,
+    {
+        BE::glwe_negate_assign(self, res)
+    }
+);
+
+impl_operations_delegate!(
+    GLWESub<BE>,
+    GLWESubImpl<BE>,
+    GLWESubDefault<BE>,
+    fn glwe_sub<R, A, B>(&self, res: &mut R, a: &A, b: &B)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
+        B: GLWEToBackendRef<BE>,
+    {
+        BE::glwe_sub(self, res, a, b)
+    },
+    fn glwe_sub_assign<R, A>(&self, res: &mut R, a: &A)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
+    {
+        BE::glwe_sub_assign(self, res, a)
+    },
+    fn glwe_sub_negate_assign<R, A>(&self, res: &mut R, a: &A)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
+    {
+        BE::glwe_sub_negate_assign(self, res, a)
+    }
+);
+
+impl_operations_delegate!(
+    GLWECopy<BE>,
+    GLWECopyImpl<BE>,
+    GLWECopyDefault<BE>,
+    fn glwe_copy<R, A>(&self, res: &mut R, a: &A)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
+    {
+        BE::glwe_copy(self, res, a)
+    }
+);
+
+impl_operations_delegate!(
     GLWEMulConst<BE>,
     GLWEMulConstImpl<BE>,
     GLWEMulConstDefault<BE>,
@@ -52,33 +131,28 @@ impl_operations_delegate!(
     fn glwe_mul_const<'s, R, A, B>(
         &self,
         cnv_offset: usize,
-        res: &mut GLWE<R>,
-        a: &GLWE<A>,
-        b: &GLWEPlaintext<B>,
+        res: &mut R,
+        a: &A,
+        b: &B,
         b_coeff: usize,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        R: Data,
-        A: Data,
-        B: Data,
-        GLWE<R>: GLWEToBackendMut<BE>,
-        GLWE<A>: crate::layouts::GLWEToBackendRef<BE>,
-        GLWEPlaintext<B>: crate::layouts::GLWEPlaintextToBackendRef<BE>,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendRef<BE> + GLWEInfos,
+        B: GLWEToBackendRef<BE> + GLWEInfos,
     {
         BE::glwe_mul_const(self, cnv_offset, res, a, b, b_coeff, scratch)
     },
     fn glwe_mul_const_assign<'s, R, B>(
         &self,
         cnv_offset: usize,
-        res: &mut GLWE<R>,
-        b: &GLWEPlaintext<B>,
+        res: &mut R,
+        b: &B,
         b_coeff: usize,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        R: Data,
-        B: Data,
-        GLWE<R>: GLWEToBackendMut<BE> + crate::layouts::GLWEToBackendRef<BE>,
-        GLWEPlaintext<B>: crate::layouts::GLWEPlaintextToBackendRef<BE>,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        B: GLWEToBackendRef<BE> + GLWEInfos,
     {
         BE::glwe_mul_const_assign(self, cnv_offset, res, b, b_coeff, scratch)
     }
@@ -99,35 +173,30 @@ impl_operations_delegate!(
     fn glwe_mul_plain<'s, R, A, B>(
         &self,
         cnv_offset: usize,
-        res: &mut GLWE<R>,
-        a: &GLWE<A>,
+        res: &mut R,
+        a: &A,
         a_effective_k: usize,
-        b: &GLWEPlaintext<B>,
+        b: &B,
         b_effective_k: usize,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        R: Data,
-        A: Data,
-        B: Data,
-        GLWE<R>: GLWEToBackendMut<BE>,
-        GLWE<A>: crate::layouts::GLWEToBackendRef<BE>,
-        GLWEPlaintext<B>: crate::layouts::GLWEPlaintextToBackendRef<BE>,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendRef<BE> + GLWEInfos,
+        B: GLWEToBackendRef<BE> + GLWEInfos,
     {
         BE::glwe_mul_plain(self, cnv_offset, res, a, a_effective_k, b, b_effective_k, scratch)
     },
     fn glwe_mul_plain_assign<'s, R, A>(
         &self,
         cnv_offset: usize,
-        res: &mut GLWE<R>,
+        res: &mut R,
         res_effective_k: usize,
-        a: &GLWEPlaintext<A>,
+        a: &A,
         a_effective_k: usize,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        R: Data,
-        A: Data,
-        GLWE<R>: GLWEToBackendMut<BE> + crate::layouts::GLWEToBackendRef<BE>,
-        GLWEPlaintext<A>: crate::layouts::GLWEPlaintextToBackendRef<BE>,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendRef<BE> + GLWEInfos,
     {
         BE::glwe_mul_plain_assign(self, cnv_offset, res, res_effective_k, a, a_effective_k, scratch)
     }
@@ -155,50 +224,43 @@ impl_operations_delegate!(
     fn glwe_tensor_apply<'s, R, A, B>(
         &self,
         cnv_offset: usize,
-        res: &mut GLWETensor<R>,
-        a: &GLWE<A>,
+        res: &mut R,
+        a: &A,
         a_effective_k: usize,
-        b: &GLWE<B>,
+        b: &B,
         b_effective_k: usize,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        R: Data,
-        A: Data,
-        B: Data,
-        GLWETensor<R>: GLWEToBackendMut<BE>,
-        GLWE<A>: crate::layouts::GLWEToBackendRef<BE>,
-        GLWE<B>: crate::layouts::GLWEToBackendRef<BE>,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendRef<BE> + GLWEInfos,
+        B: GLWEToBackendRef<BE> + GLWEInfos,
     {
         BE::glwe_tensor_apply(self, cnv_offset, res, a, a_effective_k, b, b_effective_k, scratch)
     },
     fn glwe_tensor_square_apply<'s, R, A>(
         &self,
         cnv_offset: usize,
-        res: &mut GLWETensor<R>,
-        a: &GLWE<A>,
+        res: &mut R,
+        a: &A,
         a_effective_k: usize,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        R: Data,
-        A: Data,
-        GLWETensor<R>: GLWEToBackendMut<BE>,
-        GLWE<A>: crate::layouts::GLWEToBackendRef<BE>,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendRef<BE> + GLWEInfos,
     {
         BE::glwe_tensor_square_apply(self, cnv_offset, res, a, a_effective_k, scratch)
     },
     fn glwe_tensor_relinearize<'s, R, A, T>(
         &self,
-        res: &mut GLWE<R>,
-        a: &GLWETensor<A>,
+        res: &mut R,
+        a: &A,
         tsk: &T,
         tsk_size: usize,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        R: Data,
-        A: Data,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendRef<BE> + GLWEInfos,
         T: GGLWEInfos + GLWETensorKeyPreparedToBackendRef<BE>,
-        GLWE<R>: GLWEToBackendMut<BE>,
-        GLWETensor<A>: crate::layouts::GLWEToBackendRef<BE>,
     {
         BE::glwe_tensor_relinearize(self, res, a, tsk, tsk_size, scratch)
     },
@@ -219,11 +281,16 @@ impl_operations_delegate!(
     fn glwe_rotate_tmp_bytes(&self) -> usize {
         BE::glwe_rotate_tmp_bytes(self)
     },
-    fn glwe_rotate<'r, 'a>(&self, k: i64, res: &mut GLWEBackendMut<'r, BE>, a: &GLWEBackendRef<'a, BE>) {
+    fn glwe_rotate<R, A>(&self, k: i64, res: &mut R, a: &A)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
+    {
         BE::glwe_rotate(self, k, res, a)
     },
-    fn glwe_rotate_assign<'s, 'r>(&self, k: i64, res: &mut GLWEBackendMut<'r, BE>, scratch: &mut ScratchArena<'s, BE>)
+    fn glwe_rotate_assign<'s, R>(&self, k: i64, res: &mut R, scratch: &mut ScratchArena<'s, BE>)
     where
+        R: GLWEToBackendMut<BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {
         BE::glwe_rotate_assign(self, k, res, scratch);
@@ -237,20 +304,16 @@ impl_operations_delegate!(
     fn ggsw_rotate_tmp_bytes(&self) -> usize {
         BE::ggsw_rotate_tmp_bytes(self)
     },
-    fn ggsw_rotate<'r, 'a>(
-        &self,
-        k: i64,
-        res: &mut crate::layouts::GGSWBackendMut<'r, BE>,
-        a: &crate::layouts::GGSWBackendRef<'a, BE>,
-    ) {
+    fn ggsw_rotate<R, A>(&self, k: i64, res: &mut R, a: &A)
+    where
+        R: GGSWToBackendMut<BE> + GGSWInfos,
+        A: GGSWToBackendRef<BE> + GGSWInfos,
+    {
         BE::ggsw_rotate(self, k, res, a)
     },
-    fn ggsw_rotate_assign<'s, 'r>(
-        &self,
-        k: i64,
-        res: &mut crate::layouts::GGSWBackendMut<'r, BE>,
-        scratch: &mut ScratchArena<'s, BE>,
-    ) where
+    fn ggsw_rotate_assign<'s, R>(&self, k: i64, res: &mut R, scratch: &mut ScratchArena<'s, BE>)
+    where
+        R: GGSWToBackendMut<BE> + GGSWInfos,
         for<'a> ScratchArena<'a, BE>: crate::ScratchArenaTakeCore<'a, BE> + poulpy_hal::api::ScratchAvailable,
     {
         BE::ggsw_rotate_assign(self, k, res, scratch)
@@ -263,14 +326,14 @@ impl_operations_delegate!(
     GLWEMulXpMinusOneDefault<BE>,
     fn glwe_mul_xp_minus_one<R, A>(&self, k: i64, res: &mut R, a: &A)
     where
-        R: crate::layouts::GLWEToBackendMut<BE>,
-        A: crate::layouts::GLWEToBackendRef<BE>,
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
     {
         BE::glwe_mul_xp_minus_one(self, k, res, a)
     },
     fn glwe_mul_xp_minus_one_assign<'s, R>(&self, k: i64, res: &mut R, scratch: &mut ScratchArena<'s, BE>)
     where
-        R: crate::layouts::GLWEToBackendMut<BE>,
+        R: GLWEToBackendMut<BE>,
     {
         BE::glwe_mul_xp_minus_one_assign(self, k, res, scratch)
     }
@@ -285,38 +348,38 @@ impl_operations_delegate!(
     },
     fn glwe_rsh<'s, R>(&self, k: usize, res: &mut R, scratch: &mut ScratchArena<'s, BE>)
     where
-        R: crate::layouts::GLWEToBackendMut<BE>,
+        R: GLWEToBackendMut<BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {
         BE::glwe_rsh(self, k, res, scratch)
     },
     fn glwe_lsh_assign<'s, R>(&self, res: &mut R, k: usize, scratch: &mut ScratchArena<'s, BE>)
     where
-        R: crate::layouts::GLWEToBackendMut<BE>,
+        R: GLWEToBackendMut<BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {
         BE::glwe_lsh_assign(self, res, k, scratch)
     },
     fn glwe_lsh<'s, R, A>(&self, res: &mut R, a: &A, k: usize, scratch: &mut ScratchArena<'s, BE>)
     where
-        R: crate::layouts::GLWEToBackendMut<BE>,
-        A: crate::layouts::GLWEToBackendRef<BE>,
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {
         BE::glwe_lsh(self, res, a, k, scratch)
     },
     fn glwe_lsh_add<'s, R, A>(&self, res: &mut R, a: &A, k: usize, scratch: &mut ScratchArena<'s, BE>)
     where
-        R: crate::layouts::GLWEToBackendMut<BE>,
-        A: crate::layouts::GLWEToBackendRef<BE>,
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {
         BE::glwe_lsh_add(self, res, a, k, scratch)
     },
     fn glwe_lsh_sub<'s, R, A>(&self, res: &mut R, a: &A, k: usize, scratch: &mut ScratchArena<'s, BE>)
     where
-        R: crate::layouts::GLWEToBackendMut<BE>,
-        A: crate::layouts::GLWEToBackendRef<BE>,
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {
         BE::glwe_lsh_sub(self, res, a, k, scratch)
@@ -334,7 +397,7 @@ impl_operations_delegate!(
         &self,
         glwe: &'a GLWEBackendRef<'a, BE>,
         target_base2k: usize,
-        tmp_slot: &'a mut Option<GLWEBackendMut<'a, BE>>,
+        tmp_slot: &'a mut Option<GLWEScratchMut<'a, BE>>,
         scratch: &'a mut ScratchArena<'a, BE>,
     ) -> GLWEBackendRef<'a, BE>
     where
@@ -346,7 +409,7 @@ impl_operations_delegate!(
         &self,
         glwe: &'a mut GLWEBackendMut<'a, BE>,
         target_base2k: usize,
-        tmp_slot: &'a mut Option<GLWEBackendMut<'a, BE>>,
+        tmp_slot: &'a mut Option<GLWEScratchMut<'a, BE>>,
         scratch: &'a mut ScratchArena<'a, BE>,
     ) -> GLWEBackendMut<'a, BE>
     where
@@ -354,18 +417,17 @@ impl_operations_delegate!(
     {
         BE::glwe_maybe_cross_normalize_to_mut(self, glwe, target_base2k, tmp_slot, scratch)
     },
-    fn glwe_normalize<'s, 'r, 'a>(
-        &self,
-        res: &mut GLWEBackendMut<'r, BE>,
-        a: &GLWEBackendRef<'a, BE>,
-        scratch: &mut ScratchArena<'s, BE>,
-    ) where
+    fn glwe_normalize<'s, R, A>(&self, res: &mut R, a: &A, scratch: &mut ScratchArena<'s, BE>)
+    where
+        R: GLWEToBackendMut<BE>,
+        A: GLWEToBackendRef<BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {
         BE::glwe_normalize(self, res, a, scratch)
     },
-    fn glwe_normalize_assign<'s, 'r>(&self, res: &mut GLWEBackendMut<'r, BE>, scratch: &mut ScratchArena<'s, BE>)
+    fn glwe_normalize_assign<'s, R>(&self, res: &mut R, scratch: &mut ScratchArena<'s, BE>)
     where
+        R: GLWEToBackendMut<BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
     {
         BE::glwe_normalize_assign(self, res, scratch)
@@ -389,8 +451,8 @@ impl_operations_delegate!(
     },
     fn glwe_trace<'s, R, A, K, H>(&self, res: &mut R, skip: usize, a: &A, keys: &H, scratch: &mut ScratchArena<'s, BE>)
     where
-        R: crate::layouts::GLWEToBackendMut<BE> + GLWEInfos,
-        A: crate::layouts::GLWEToBackendRef<BE> + GLWEInfos,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendRef<BE> + GLWEInfos,
         K: GGLWEPreparedToBackendRef<BE> + GetGaloisElement + GGLWEInfos,
         H: GLWEAutomorphismKeyHelper<K, BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
@@ -400,7 +462,7 @@ impl_operations_delegate!(
     },
     fn glwe_trace_assign<'s, R, K, H>(&self, res: &mut R, skip: usize, keys: &H, scratch: &mut ScratchArena<'s, BE>)
     where
-        R: crate::layouts::GLWEToBackendMut<BE> + GLWEInfos,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
         K: GGLWEPreparedToBackendRef<BE> + GetGaloisElement + GGLWEInfos,
         H: GLWEAutomorphismKeyHelper<K, BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
@@ -432,36 +494,13 @@ impl_operations_delegate!(
         keys: &H,
         scratch: &mut ScratchArena<'s, BE>,
     ) where
-        R: crate::layouts::GLWEToBackendMut<BE> + GLWEInfos,
-        A: crate::layouts::GLWEToBackendMut<BE> + GLWEInfos,
+        R: GLWEToBackendMut<BE> + GLWEInfos,
+        A: GLWEToBackendMut<BE> + GLWEInfos,
         K: GGLWEPreparedToBackendRef<BE> + GetGaloisElement + GGLWEInfos,
         H: GLWEAutomorphismKeyHelper<K, BE>,
         ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
         BE: 's,
     {
         BE::glwe_pack(self, res, a, log_gap_out, keys, scratch)
-    }
-);
-
-impl_operations_delegate!(
-    GLWEPackerOps<BE>,
-    GLWEPackImpl<BE>,
-    GLWEPackerOpsDefault<BE>,
-    fn packer_add<'s, A, K, H>(
-        &self,
-        packer: &mut crate::GLWEPacker<BE::OwnedBuf>,
-        a: Option<&A>,
-        i: usize,
-        auto_keys: &H,
-        scratch: &mut ScratchArena<'s, BE>,
-    ) where
-        A: crate::layouts::GLWEToBackendRef<BE> + GLWEInfos,
-        K: GGLWEPreparedToBackendRef<BE> + GetGaloisElement + GGLWEInfos,
-        H: GLWEAutomorphismKeyHelper<K, BE>,
-        ScratchArena<'s, BE>: crate::ScratchArenaTakeCore<'s, BE>,
-        crate::layouts::BackendGLWE<BE>: crate::layouts::GLWEToBackendMut<BE> + crate::layouts::GLWEToBackendRef<BE>,
-        BE: 's,
-    {
-        BE::packer_add(self, packer, a, i, auto_keys, scratch)
     }
 );

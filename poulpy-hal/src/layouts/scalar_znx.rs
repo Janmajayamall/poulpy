@@ -139,13 +139,14 @@ impl<D: HostDataMut> ScalarZnx<D> {
     /// Panics if `hw > N`.
     pub fn fill_ternary_hw(&mut self, col: usize, hw: usize, source: &mut Source) {
         assert!(hw <= self.n());
-        // Zero-initialize before setting non-zero entries, since shuffle will
-        // mix positions and we need indices hw..n to be zero.
-        self.at_mut(col, 0).fill(0);
-        self.at_mut(col, 0)[..hw]
-            .iter_mut()
-            .for_each(|x: &mut i64| *x = (((source.next_u32() & 1) as i64) << 1) - 1);
-        self.at_mut(col, 0).shuffle(source);
+        let n: u64 = self.n() as u64;
+        let mask: u64 = n.next_power_of_two() - 1;
+        let slice = self.at_mut(col, 0);
+        slice.fill(0);
+        for _ in 0..hw {
+            let idx: usize = source.next_u64n(n, mask) as usize;
+            slice[idx] = (((source.next_u32() & 1) as i64) << 1) - 1;
+        }
     }
 
     /// Fills column `col` with binary values `{0, 1}` where each entry is `1`
@@ -299,10 +300,7 @@ impl<'b, B: Backend + 'b> ScalarZnxToBackendRef<B> for &ScalarZnx<B::BufRef<'b>>
 
 impl<'b, B: Backend + 'b> ScalarZnxToBackendRef<B> for &mut ScalarZnx<B::BufMut<'b>> {
     fn to_backend_ref(&self) -> ScalarZnxBackendRef<'_, B> {
-        ScalarZnx {
-            data: B::view_ref_mut(&self.data),
-            shape: self.shape,
-        }
+        scalar_znx_backend_ref_from_mut::<B>(self)
     }
 }
 
@@ -322,10 +320,23 @@ impl<B: Backend> ScalarZnxToBackendMut<B> for ScalarZnx<B::OwnedBuf> {
 
 impl<'b, B: Backend + 'b> ScalarZnxToBackendMut<B> for &mut ScalarZnx<B::BufMut<'b>> {
     fn to_backend_mut(&mut self) -> ScalarZnxBackendMut<'_, B> {
-        ScalarZnx {
-            data: B::view_mut_ref(&mut self.data),
-            shape: self.shape,
-        }
+        scalar_znx_backend_mut_from_mut::<B>(self)
+    }
+}
+
+fn scalar_znx_backend_ref_from_mut<'a, 'b, B: Backend + 'b>(scalar: &'a ScalarZnx<B::BufMut<'b>>) -> ScalarZnxBackendRef<'a, B> {
+    ScalarZnx {
+        data: B::view_ref_mut(&scalar.data),
+        shape: scalar.shape,
+    }
+}
+
+fn scalar_znx_backend_mut_from_mut<'a, 'b, B: Backend + 'b>(
+    scalar: &'a mut ScalarZnx<B::BufMut<'b>>,
+) -> ScalarZnxBackendMut<'a, B> {
+    ScalarZnx {
+        data: B::view_mut_ref(&mut scalar.data),
+        shape: scalar.shape,
     }
 }
 

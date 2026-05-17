@@ -16,7 +16,7 @@ use poulpy_hal::{
     layouts::ScratchOwned,
 };
 
-use crate::{CKKSInfos, leveled::api::CKKSMulAddOps};
+use crate::{CKKSInfos, CKKSMeta, leveled::api::CKKSMulAddOps};
 
 use super::helpers::{TestContext, TestMulBackend as Backend, TestScalar, TestVector, assert_ct_meta};
 
@@ -192,7 +192,7 @@ pub fn test_mul_add_const_znx_into_aligned<BE: Backend, F: TestScalar>(ctx: &Tes
 
     let mut dst = ctx.encrypt(ctx.max_k(), &dst_re, &dst_im, &mut scratch.borrow());
     let a = ctx.encrypt(ctx.max_k(), &a_re, &a_im, &mut scratch.borrow());
-    let cst_znx = ctx.const_rnx(Some(CONST_RE), Some(CONST_IM), ctx.meta());
+    let cst_znx = ctx.const_full_rnx(Some(CONST_RE), Some(CONST_IM), ctx.meta());
     ctx.module
         .ckks_mul_add_pt_const_znx_into(&mut dst, &a, &cst_znx, &mut scratch.borrow())
         .unwrap();
@@ -216,7 +216,11 @@ pub fn test_mul_add_const_znx_zero_preserves_dst_meta<BE: Backend, F: TestScalar
     let mut dst = ctx.encrypt(ctx.max_k(), &dst_re, &dst_im, &mut scratch.borrow());
     let a = ctx.encrypt(ctx.max_k(), &a_re, &a_im, &mut scratch.borrow());
     let dst_meta = dst.meta();
-    let cst_znx = ctx.const_rnx_with_prec(None, None, ctx.precision_at(ctx.meta().log_delta - DELTA_LOG_DELTA));
+    let zero_prec = CKKSMeta {
+        log_delta: 0,
+        log_budget: ctx.meta().log_budget,
+    };
+    let cst_znx = ctx.const_full_rnx_with_prec(None, None, zero_prec);
     ctx.module
         .ckks_mul_add_pt_const_znx_into(&mut dst, &a, &cst_znx, &mut scratch.borrow())
         .unwrap();
