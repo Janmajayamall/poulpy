@@ -28,12 +28,15 @@ enum Control {
     FusedFirst,
     HanKi,
     Residue,
+    #[serde(rename = "2-han_ki-04")]
+    FusedHanKi,
 }
 
 impl Control {
     fn design(self) -> Result<(BootstrappingPreset, Vec<usize>)> {
         let stock = n16_d35_k685_p19_s2c_ffr_ci()?;
         match self {
+            Self::FusedHanKi => candidate::fused_han_ki(stock),
             Self::Stock => Ok((stock, vec![])),
             Self::Pow2 => Ok((stock.with_power_of_two_keys()?, vec![])),
             Self::FusedFirst => Ok((stock, vec![0])),
@@ -187,6 +190,21 @@ fn main() -> Result<()> {
 mod tests {
     use super::*;
     use poulpy_ckks::test_suite::helpers::precision_stats;
+
+    #[test]
+    fn phase_two_control_uses_the_held_out_transform_schedule() -> Result<()> {
+        let control: Control = serde_json::from_value(json!("2-han_ki-04"))?;
+        let (preset, fused) = control.design()?;
+        let preset = preset_for_backend::<BE>(&preset)?;
+        let s2c = preset.plan().slots_to_coeffs().schedule();
+        let c2s = preset.plan().coeffs_to_slots().schedule();
+        assert_eq!(fused, [0, 1, 2, 3]);
+        assert_eq!(s2c.depths(), [3, 3, 4, 5]);
+        assert_eq!(c2s.depths(), [4, 2, 3, 3, 3]);
+        assert_eq!((preset.base2k(), preset.bootstrap_k()), (52, 1435));
+        assert_eq!(preset.plan().eval_mod().eval_depth(), 8);
+        Ok(())
+    }
 
     #[test]
     fn first_and_second_bootstrap_enforce_their_own_inclusive_bounds() {

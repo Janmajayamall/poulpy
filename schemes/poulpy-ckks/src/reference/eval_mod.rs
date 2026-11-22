@@ -327,7 +327,18 @@ where
                     }
                     scratch.scope(|scratch_local| -> Result<()> {
                         let (mut squared, mut nested) = scratch_local.take_ckks_ciphertext_like_scratch(&*res);
-                        module.ckks_square_into(&mut squared, &*res, tsk, &mut nested)?;
+                        // A mixed-scale base spends the narrower scale through both doublings.
+                        // Keep the low bits of the final square to restore the planned output scale.
+                        let extra = params.plan.f_mod_log_delta.saturating_sub(res.log_delta());
+                        if !replicated
+                            && i + 1 == steps
+                            && extra != 0
+                            && matches!(params.f_mod_bsgs, EvalModBsgs::Factored { .. })
+                        {
+                            square_wide_into(OP, module, &mut squared, &*res, tsk, extra, &mut nested)?;
+                        } else {
+                            module.ckks_square_into(&mut squared, &*res, tsk, &mut nested)?;
+                        }
                         module.ckks_double_into(res, &squared, &mut nested)
                     })?;
                     const_sub_assign(OP, module, res, consts, i, scratch)?;
@@ -434,7 +445,8 @@ where
         + CKKSMulOps<BE, Rg>
         + CKKSCopyOps<BE, Rg>
         + CKKSPow2Ops<BE, Rg>
-        + GLWENormalize<BE, Rg>,
+        + GLWENormalize<BE, Rg>
+        + GLWETensoring<BE, Rg>,
     R: GLWEToBackendMut<BE, Rg> + GLWEToBackendRef<BE, Rg> + CKKSCtBounds + SetCKKSInfos + SetBSGSMeta,
     P: GLWEToBackendRef<BE, Rg> + CKKSCtBounds + BSGSMeta + IntPolyInfos + CKKSMaskedConstants<BE, Rg>,
     H: GetTensorKey<BE, Rg>,

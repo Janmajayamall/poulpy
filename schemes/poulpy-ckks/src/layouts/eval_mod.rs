@@ -146,11 +146,11 @@ pub enum EvalModType {
 /// The parameters act in this order, with `K = f_mod_interval` and `r = f_mod_log_interval_reduction`:
 ///
 /// 1. **Input.** The transform feeding EvalMod carries [`Self::input_scaling`], `1/K`. The input is relabelled at
-///    `f_mod_log_delta`, keeping its budget, and every product runs at that scale.
+///    `f_mod_log_delta`, keeping its budget. The mixed-scale half-angle fit adjusts individual powers from this scale.
 /// 2. **Base polynomial.** `eval_mod_type` picks `f` and how it is fitted over `[-K/2^r, K/2^r]`, at degree
 ///    `f_mod_degree` with coefficients at `coeffs_meta`, and `split_strategy` trades depth against rotations.
-/// 3. **Range extension.** `r` squarings, each consuming `f_mod_log_delta` bits, extend the range back to `[-K, K]`: a
-///    larger `r` allows a lower `f_mod_degree` for more depth.
+/// 3. **Range extension.** Each of the `r` squarings spends the base result's log scale.
+///    A larger `r` allows a lower `f_mod_degree` for more depth.
 /// 4. **Inverse.** `f_mod_inv_degree` composes `f⁻¹`, which makes the result linear in `m` across the interval.
 /// 5. **Output.** `scaling` sets the amplitude, `scaling/(2π)`, and the result is relabelled at the input's scale,
 ///    which keeps its budget and lowers `k` by the difference.
@@ -913,7 +913,9 @@ where
         (inv_two_pi * scaling).ckks_powf(F::one() / sc_fac)
     };
 
-    let half_angle_fit = crate::approximation::half_angle_cos::matches_plan(&lit);
+    use crate::approximation::{balanced_half_angle, half_angle_cos};
+    let half_angle_fit = half_angle_cos::matches_plan(&lit);
+    let balanced = lit.f_mod_log_delta == balanced_half_angle::LOG_DELTA;
     let mut f_mod_poly: Polynomial<F> = match lit.eval_mod_type {
         EvalModType::CenteredResidue => {
             let half = 2f64.ckks_powi(-(lit.log_msg_ratio as i32));
@@ -972,10 +974,14 @@ where
             Polynomial::new_with_parity(Basis::Chebyshev, coeffs, Parity::Full)
         }
         EvalModType::CosHKEven if half_angle_fit => {
-            let coeffs = crate::approximation::half_angle_cos::coefficients()?
-                .into_iter()
-                .map(|c| scalar_from_f64("half-angle cosine", c))
-                .collect::<Result<Vec<F>>>()?;
+            let coeffs = if balanced {
+                balanced_half_angle::coefficients()?
+            } else {
+                half_angle_cos::coefficients()?
+            }
+            .into_iter()
+            .map(|c| scalar_from_f64("half-angle cosine", c))
+            .collect::<Result<Vec<F>>>()?;
             Polynomial::new_with_parity(Basis::Chebyshev, coeffs, Parity::Even)
         }
         EvalModType::CosHKEven => {
@@ -1038,7 +1044,12 @@ where
         range_extension_consts,
         f_mod_input_offset,
         f_mod_bsgs: if half_angle_fit {
-            let factors = crate::approximation::half_angle_cos::factorization()?.encode_with(|values| {
+            let factors = if balanced {
+                balanced_half_angle::factorization()?
+            } else {
+                half_angle_cos::factorization()?
+            };
+            let factors = factors.encode_with(|values| {
                 let coeffs = values
                     .iter()
                     .map(|&c| scalar_from_f64("half-angle factor", c))
@@ -1131,16 +1142,18 @@ impl<F, P> EvalMod<F, P> {
     pub fn consumed_bits(&self) -> usize {
         let coeff = ckks_log_delta(&self.plan.coeffs_meta.meta);
         let log_delta = self.plan.f_mod_log_delta;
-        let base = match &self.f_mod_bsgs {
-            EvalModBsgs::Real(p) => p.consumed_bits(log_delta, coeff),
-            EvalModBsgs::Factored { dense, factors } => dense
-                .consumed_bits(log_delta, coeff)
-                .max(factors.plan().required_budget_bits(log_delta, coeff)),
-            EvalModBsgs::Complex(p) => p.re.consumed_bits(log_delta, coeff),
+        let steps = self.plan.f_mod_log_interval_reduction;
+        let range_ext = steps * log_delta;
+        let base_and_extension = match &self.f_mod_bsgs {
+            EvalModBsgs::Real(p) => p.consumed_bits(log_delta, coeff) + range_ext,
+            EvalModBsgs::Factored { dense, factors } => {
+                let precision = factors.plan().precision_profile(log_delta, coeff);
+                (dense.consumed_bits(log_delta, coeff) + range_ext).max(precision.required_bits + steps * precision.output_scale)
+            }
+            EvalModBsgs::Complex(p) => p.re.consumed_bits(log_delta, coeff) + range_ext,
         };
-        let range_ext = self.plan.f_mod_log_interval_reduction * log_delta;
         let inv = self.f_mod_inv_bsgs.as_ref().map_or(0, |p| p.consumed_bits(log_delta, coeff));
-        base + range_ext + inv
+        base_and_extension + inv
     }
 
     /// Per-step range-extension scaling `s`: the base polynomial bakes `s` into its

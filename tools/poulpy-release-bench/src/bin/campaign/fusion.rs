@@ -158,6 +158,150 @@ impl Factor {
     }
 
     pub fn apply(&self, m: &Module<BE>, ct: &mut CKKSCiphertextOwned<BE>, scratch: &mut ScratchArena<'_, BE>) {
+        use poulpy_core::gglwe_product_accumulation_output_size;
+        use poulpy_hal::{
+            api::{
+                ScratchArenaTakeScalarZnx, ScratchArenaTakeSvpPPol, ScratchArenaTakeVecZnxDft, SvpPPolPrepare,
+                VecZnxDftAddAssign, VecZnxDftApply, VecZnxDftAutomorphism, VecZnxDftAutomorphismPlan, VecZnxDftZero,
+                VecZnxIdftNormalize, VecZnxIdftNormalizeTmpBytes, VmpApplyDftToDftAdd, VmpApplyDftToDftAddTmpBytes,
+            },
+            layouts::{PrepareHint, ScalarZnxToBackendRef, VecZnxDftToBackendRef},
+        };
+        use rayon::prelude::*;
+
+        let n = ct.n().as_usize();
+        let radix = ct.base2k().as_usize();
+        let out_k = ct.k().as_usize() - self.terms[0].diagonal.log_delta();
+        let output = GLWELayout {
+            n: ct.n(),
+            k: out_k.into(),
+            base2k: ct.base2k(),
+            rank: ct.rank(),
+        };
+        let count = self.terms.len();
+        let key = &self.terms[0].key;
+        let acc_size = gglwe_product_accumulation_output_size::<BE, _, _, _>(&output, ct, key, count);
+        // Cover both the switch and the body product accumulated for each term. There are
+        // at most log2(n) transform factors. Reserve half the failure budget for fusion.
+        let failure_bits = 129 + (n.ilog2() as usize * count * 4 * key.size()).next_power_of_two().ilog2() as usize;
+        let input_size = ct.size();
+        let max_radix = Module::<BE>::max_base2k::<Standard>(n, count * (input_size + 1), failure_bits, false);
+        let max_degree = self.terms.iter().map(|t| t.diagonal.n().as_usize()).max().unwrap();
+        let diagonal_bytes = BE::scratch_aligned(BE::scalar_znx_bytes_of(max_degree, 1))
+            + BE::scratch_aligned(BE::svp_ppol_bytes_of(max_degree, 1, PrepareHint::OneShot));
+        let acc_bytes = BE::scratch_aligned(BE::vec_znx_dft_bytes_of(n, 2, acc_size));
+        let op_bytes = m.vmp_apply_dft_to_dft_add_tmp_bytes(acc_size, input_size, key.dnum().as_usize(), 1, 2, key.size());
+        let per_worker =
+            BE::scratch_aligned(BE::vec_znx_dft_bytes_of(n, 1, input_size)) + diagonal_bytes.max(BE::scratch_aligned(op_bytes));
+        let input_bytes = BE::scratch_aligned(BE::vec_znx_dft_bytes_of(n, 2, input_size));
+        let available = scratch.available().saturating_sub(input_bytes);
+        let groups = count
+            .min(rayon::current_num_threads())
+            .min(available / (acc_bytes + per_worker));
+        if self
+            .terms
+            .iter()
+            .any(|t| t.diagonal.n().as_usize() < BE::MIN_DEGREE || t.diagonal.encoded_k().as_usize() > 64)
+            || radix > max_radix
+            || groups == 0
+            || available - groups * acc_bytes < m.vec_znx_idft_normalize_tmp_bytes(output.size(), acc_size)
+        {
+            return self.apply_separate(m, ct, scratch);
+        }
+
+        if !GLWEToBackendRef::<BE>::is_canonical(ct) {
+            m.glwe_normalize_assign(ct, scratch);
+        }
+        let (mut input, work) = scratch.borrow().take_vec_znx_dft_scratch(n, 2, ct.size());
+        let src = GLWEToBackendRef::<BE>::to_backend_ref(ct);
+        for col in 0..2 {
+            m.vec_znx_dft_apply(1, 0, &mut input, col, src.data(), col);
+        }
+        let (mut partials, mut work) = work.take_vec_znx_dft_slice_scratch(n, groups, 2, acc_size);
+        let (arenas, _) = work.borrow().split(groups, per_worker);
+        partials.par_iter_mut().zip(arenas).enumerate().for_each(|(g, (acc, arena))| {
+            let (mut mask, mut arena) = arena.take_vec_znx_dft_scratch(n, 1, input_size);
+            for col in 0..2 {
+                m.vec_znx_dft_zero(acc, col);
+            }
+            for term in &self.terms[g * count / groups..(g + 1) * count / groups] {
+                // Gadget digits are whole limbs. Applying the Galois permutation after the
+                // two forward transforms shares their cost across every diagonal.
+                let rotation = <Module<BE> as VecZnxDftAutomorphismPlan<BE>>::vec_znx_dft_automorphism_plan(m, n, term.p);
+                let input = input.to_backend_ref();
+                // A subring NTT evaluation repeats at consecutive full-ring frequencies.
+                // Read the diagonal at its own degree and accumulate each weighted
+                // Galois image directly into the switch output.
+                let degree = term.diagonal.n().as_usize();
+                {
+                    let (mut scalar, temp) = arena.borrow().take_scalar_znx_scratch(degree, 1);
+                    term.diagonal.decode_vec_i64(scalar.at_mut(0, 0), term.diagonal.encoded_k());
+                    let (mut diagonal, _) = temp.take_svp_ppol_scratch::<Standard>(degree, 1, PrepareHint::OneShot);
+                    m.svp_ppol_prepare(&mut diagonal, 0, &scalar.to_backend_ref(), 0);
+                    let columns = if term.p == 1 { 2 } else { 1 };
+                    for limb in 0..input_size.min(acc_size) {
+                        for col in 0..columns {
+                            Self::add_weighted_rotation(
+                                acc.at_mut(col, limb),
+                                input.at(col, limb),
+                                &rotation.perm,
+                                diagonal.raw(),
+                            );
+                        }
+                    }
+                }
+                if term.p != 1 {
+                    m.vec_znx_dft_automorphism_with_plan(&rotation, &mut mask, 0, &input, 1);
+                    let key = GGLWEPreparedToBackendRef::<BE>::to_backend_ref(&term.key);
+                    m.vmp_apply_dft_to_dft_add(acc, &mask.to_backend_ref(), key.data(), 0, &mut arena);
+                }
+            }
+        });
+        let (acc, rest) = partials.split_first_mut().unwrap();
+        for partial in rest {
+            for col in 0..2 {
+                m.vec_znx_dft_add_assign(acc, col, &partial.to_backend_ref(), col);
+            }
+        }
+        ct.set_k(out_k.into());
+        GLWEToBackendMut::<BE>::set_canonical(ct, true);
+        GLWEToBackendMut::<BE>::set_noise(ct, None);
+        let mut dst = GLWEToBackendMut::<BE>::to_backend_mut(ct);
+        for col in 0..2 {
+            m.vec_znx_idft_normalize(dst.data_mut(), radix, out_k, 0, col, acc, col, radix, None, &mut work);
+        }
+    }
+
+    /// The AVX backend keeps four canonical 30-bit residues per NTT coefficient.
+    #[inline]
+    fn add_weighted_rotation(
+        dst: &mut [<BE as Backend>::DftWord],
+        src: &[<BE as Backend>::DftWord],
+        permutation: &[u32],
+        diagonal: &[<BE as Backend>::DftWord],
+    ) {
+        use poulpy_cpu_portable::kernels::ntt4x30::primes::Primes30;
+        use poulpy_hal::layouts::PrimeSet;
+
+        let log_stride = (src.len() / diagonal.len()).ilog2();
+        for (i, (out, &j)) in dst.iter_mut().zip(permutation).enumerate() {
+            let a = src[j as usize].0;
+            let d = diagonal[i >> log_stride].0;
+            for prime in 0..4 {
+                let sum = u64::from(out.0[prime]) + u64::from(a[prime]) * u64::from(d[prime]);
+                // For sum < 2^60 these two truncations underestimate sum/q by at most two.
+                // Both factors in the quotient multiply fit u32, including the fixed reciprocal.
+                let q = Primes30::Q[prime];
+                let reciprocal = (1u64 << 61) / u64::from(q);
+                let quotient = ((sum >> 29) * reciprocal) >> 32;
+                let r = (sum as u32).wrapping_sub((quotient as u32).wrapping_mul(q));
+                let r = r.min(r.wrapping_sub(q));
+                out.0[prime] = r.min(r.wrapping_sub(q));
+            }
+        }
+    }
+
+    fn apply_separate(&self, m: &Module<BE>, ct: &mut CKKSCiphertextOwned<BE>, scratch: &mut ScratchArena<'_, BE>) {
         let full = GLWELayout {
             n: ct.n(),
             base2k: ct.base2k(),
@@ -197,5 +341,34 @@ impl Factor {
         ct.set_k(narrow.k);
         m.glwe_copy(ct, &sum, &mut work);
         GLWEToBackendMut::<BE>::set_noise(ct, None);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Factor;
+    use poulpy_cpu_portable::kernels::ntt4x30::primes::Primes30;
+    use poulpy_hal::layouts::{CrtWord, PrimeSet};
+
+    #[test]
+    fn weighted_subring_rotation_matches_modular_product_sum() {
+        let values = [0, 1, 2, (1 << 29) - 1, 1 << 29].map(|v| CrtWord::<Primes30, u32>([v; 4]));
+        let near_q = [3, 2, 1].map(|delta| CrtWord(Primes30::Q.map(|q| q - delta)));
+        let src = [values.as_slice(), near_q.as_slice()].concat();
+        let permutation = [3, 7, 1, 0, 4, 5, 2, 6];
+        for &initial in &src {
+            for i in 0..src.len() {
+                let diagonal = [src[i], src[(i + 1) % src.len()]];
+                let mut dst = [initial; 8];
+                Factor::add_weighted_rotation(&mut dst, &src, &permutation, &diagonal);
+                for (k, &j) in permutation.iter().enumerate() {
+                    for (p, q) in Primes30::Q.into_iter().enumerate() {
+                        let product = u64::from(src[j as usize].0[p]) * u64::from(diagonal[k / 4].0[p]);
+                        let expected = (u64::from(initial.0[p]) + product) % u64::from(q);
+                        assert_eq!(u64::from(dst[k].0[p]), expected);
+                    }
+                }
+            }
+        }
     }
 }

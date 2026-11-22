@@ -10,6 +10,7 @@
 //! Generic callers previously bounded only by `Float` must add this bound.
 //! User callbacks must be pure and use portable math for reproducible results.
 
+pub(crate) mod balanced_half_angle;
 pub(crate) mod half_angle_cos;
 mod remez;
 mod select;
