@@ -544,6 +544,12 @@ impl EvalModPlan {
 pub enum EvalModBsgs<P> {
     /// Real-valued `f` (e.g. the `sin`/`cos` families).
     Real(BSGSPolynomial<P>),
+    /// Equivalent full-slot factorization. Both forms must fit the bootstrap plan's modulus budget.
+    /// The dense form supplies the budget and the phase-aware replicated evaluation.
+    Factored {
+        dense: BSGSPolynomial<P>,
+        factors: crate::polynomial::EncodedFactoredPolynomial<P>,
+    },
     /// Complex-valued `f` (e.g. [`EvalModType::ExpCmplx`]).
     Complex(ComplexBSGSPolynomial<P>),
 }
@@ -1087,6 +1093,7 @@ impl<F, P> EvalMod<F, P> {
     pub fn eval_depth(&self) -> usize {
         let base = match &self.f_mod_bsgs {
             EvalModBsgs::Real(p) => p.eval_depth(),
+            EvalModBsgs::Factored { dense, factors } => dense.eval_depth().max(factors.plan().eval_depth()),
             EvalModBsgs::Complex(p) => p.re.eval_depth(),
         };
         let inv = self.f_mod_inv_bsgs.as_ref().map_or(0, |p| p.eval_depth());
@@ -1103,6 +1110,9 @@ impl<F, P> EvalMod<F, P> {
         let log_delta = self.plan.f_mod_log_delta;
         let base = match &self.f_mod_bsgs {
             EvalModBsgs::Real(p) => p.consumed_bits(log_delta, coeff),
+            EvalModBsgs::Factored { dense, factors } => dense
+                .consumed_bits(log_delta, coeff)
+                .max(factors.plan().required_budget_bits(log_delta, coeff)),
             EvalModBsgs::Complex(p) => p.re.consumed_bits(log_delta, coeff),
         };
         let range_ext = self.plan.f_mod_log_interval_reduction * log_delta;
@@ -1144,6 +1154,10 @@ impl<F, P> EvalMod<F, P> {
             f_mod_bsgs: match f_mod_bsgs {
                 EvalModBsgs::Real(p) => EvalModBsgs::Real(p.map_baby_steps_ref(&mut f)),
                 EvalModBsgs::Complex(p) => EvalModBsgs::Complex(p.map_baby_steps_ref(&mut f)),
+                EvalModBsgs::Factored { dense, factors } => EvalModBsgs::Factored {
+                    dense: dense.map_baby_steps_ref(&mut f),
+                    factors: factors.map_plaintexts(&mut f),
+                },
             },
             f_mod_inv_bsgs: f_mod_inv_bsgs.as_ref().map(|p| p.map_baby_steps_ref(&mut f)),
             f_mod_poly,

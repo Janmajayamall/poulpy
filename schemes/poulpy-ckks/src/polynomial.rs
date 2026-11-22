@@ -11,6 +11,9 @@ use crate::{
     layouts::{CKKSPlaintextAlloc, CKKSPlaintextOwned, CKKSPlaintextVecHostCodec, CKKSScalar},
 };
 
+mod factored;
+pub use factored::{EncodedFactoredPolynomial, Factor, FactorStep, FactorUpdate, FactoredPolynomial};
+
 pub use poulpy_core::layouts::{
     BSGSPolynomial, Basis, DEFAULT_SPLIT_STRATEGY, Parity, Polynomial, PolynomialInputTransform, SplitStrategy, change_of_basis,
     evaluate_coeffs, split_degree,

@@ -8,7 +8,10 @@ use poulpy_hal::layouts::{Backend, Module, Ring};
 
 use crate::{
     CKKSCtBounds, CKKSInfos,
-    api::{CKKSAddOps, CKKSCopyOps, CKKSMulAddOps, CKKSMulOps, CKKSPow2Ops, CKKSRoundOps, CKKSSubOps, PolynomialInputTransform},
+    api::{
+        CKKSAddOps, CKKSCopyOps, CKKSFactoredPolynomialEvaluationOps, CKKSMulAddOps, CKKSMulOps, CKKSPow2Ops, CKKSRoundOps,
+        CKKSSubOps, PolynomialInputTransform,
+    },
     layouts::eval_mod::{EvalMod, EvalModBsgs},
     power_basis::populated_powers,
 };
@@ -115,7 +118,7 @@ where
     // Scratch holds the powers of the base polynomial, its transformed input, the input when its allocation is too
     // narrow, and a working ciphertext for the optional inverse composition.
     let powers = match &params.f_mod_bsgs {
-        EvalModBsgs::Real(poly) => {
+        EvalModBsgs::Real(poly) | EvalModBsgs::Factored { dense: poly, .. } => {
             populated_powers(poly.degree(), poly.log_split(), poly.parity(), poly.basis())
                 + usize::from(poly.input_transform() != PolynomialInputTransform::Identity)
         }
@@ -136,7 +139,7 @@ where
         let poly_max =
             |poly: &crate::polynomial::BSGSPolynomial<P>| poly.baby_steps().iter().map(|c| c.size()).max().unwrap_or(0);
         let base = match &params.f_mod_bsgs {
-            EvalModBsgs::Real(poly) => poly_max(poly),
+            EvalModBsgs::Real(poly) | EvalModBsgs::Factored { dense: poly, .. } => poly_max(poly),
             EvalModBsgs::Complex(poly) => poly_max(&poly.re).max(poly_max(&poly.im)),
         };
         base.max(params.f_mod_inv_bsgs.as_ref().map_or(0, poly_max))
@@ -149,7 +152,7 @@ where
     let replicated = match ct.slot_layout() {
         SlotLayout::Replicated(_) => {
             let coeffs = match &params.f_mod_bsgs {
-                EvalModBsgs::Real(poly) => poly.baby_step(0),
+                EvalModBsgs::Real(poly) | EvalModBsgs::Factored { dense: poly, .. } => poly.baby_step(0),
                 EvalModBsgs::Complex(poly) => poly.re.baby_step(0),
             };
             let masked_products = module
@@ -188,5 +191,12 @@ where
         .max(square_scope)
         .max(crate::power_basis::ckks_power_product_tmp_bytes(module, &work, tsk))
         .max(fused_baby);
-    carved + steps.max(replicated)
+    let dense = carved + steps.max(replicated);
+    if let EvalModBsgs::Factored { factors, .. } = &params.f_mod_bsgs
+        && ct.slot_layout() == SlotLayout::Full
+    {
+        return dense
+            .max(usize::from(input_copy) * compact_work + module.ckks_eval_poly_factored_tmp_bytes(res, &work, factors, tsk));
+    }
+    dense
 }

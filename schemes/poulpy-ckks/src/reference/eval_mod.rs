@@ -14,8 +14,8 @@ use poulpy_core::oep::{GLWEMulConstImpl, GLWEMulPlainImpl};
 use poulpy_core::{
     GLWEBytesOf, GLWECopy, GLWENormalize, GLWETensoring,
     layouts::{
-        BSGSMeta, GGLWEInfos, GLWELayout, GLWETensorKeyPrepared, GLWEToBackendMut, GLWEToBackendRef, LWEInfos, Rank, SetBSGSMeta,
-        SetK, TorusPrecision, prepared::GLWETensorKeyPreparedToBackendRef,
+        BSGSMeta, GGLWEInfos, GLWELayout, GLWEPlaintextInfos, GLWETensorKeyPrepared, GLWEToBackendMut, GLWEToBackendRef,
+        LWEInfos, Rank, SetBSGSMeta, SetK, TorusPrecision, prepared::GLWETensorKeyPreparedToBackendRef,
     },
 };
 use poulpy_hal::{
@@ -26,8 +26,8 @@ use poulpy_hal::{
 use crate::{
     CKKSCtBounds, CKKSInfos, CKKSLayout, SetCKKSInfos, SlotLayout,
     api::{
-        CKKSAddOps, CKKSComplexPolynomialEvaluationOps, CKKSCopyOps, CKKSMulAddOps, CKKSMulOps, CKKSPolynomialEvaluationOps,
-        CKKSPow2Ops, CKKSRoundOps, CKKSSubOps, PolynomialInputTransform,
+        CKKSAddOps, CKKSComplexPolynomialEvaluationOps, CKKSCopyOps, CKKSFactoredPolynomialEvaluationOps, CKKSMulAddOps,
+        CKKSMulOps, CKKSPolynomialEvaluationOps, CKKSPow2Ops, CKKSRoundOps, CKKSSubOps, PolynomialInputTransform,
     },
     layouts::{
         CKKSCiphertextOwned, CKKSCiphertextViewMut, CKKSMaskedConstants, ScratchArenaTakeCKKSCiphertext,
@@ -234,7 +234,7 @@ where
     );
     checked_log_budget_sub(OP, ct.log_budget(), params.consumed_bits())?;
     let mut constants: Vec<&P> = match &params.f_mod_bsgs {
-        EvalModBsgs::Real(bsgs) => bsgs.baby_steps().iter().collect(),
+        EvalModBsgs::Real(bsgs) | EvalModBsgs::Factored { dense: bsgs, .. } => bsgs.baby_steps().iter().collect(),
         EvalModBsgs::Complex(bsgs) => bsgs.re.baby_steps().iter().chain(bsgs.im.baby_steps()).collect(),
     };
     constants.extend(params.range_extension_consts.iter().chain(&params.f_mod_input_offset));
@@ -247,6 +247,10 @@ where
 fn relinearizes<F, P>(params: &EvalMod<F, P>) -> bool {
     let products = |poly: &BSGSPolynomial<P>| poly.degree() > 1 || poly.input_transform() != PolynomialInputTransform::Identity;
     let (base, squares) = match &params.f_mod_bsgs {
+        EvalModBsgs::Factored { factors, dense } => (
+            factors.plan().has_products() || products(dense),
+            params.range_extension_consts.is_some(),
+        ),
         EvalModBsgs::Real(bsgs) => (products(bsgs), params.range_extension_consts.is_some()),
         EvalModBsgs::Complex(bsgs) => (products(&bsgs.re) || products(&bsgs.im), true),
     };
@@ -267,9 +271,10 @@ fn eval_mod<R, C, P, F, BE, H, Rg: Ring>(
     scratch: &mut ScratchArena<'_, BE>,
 ) -> Result<()>
 where
-    BE: Backend,
+    BE: Backend + GLWEMulConstImpl<Rg>,
     Module<BE>: CKKSPolynomialEvaluationOps<BE, Rg>
         + CKKSEvalModComplexOps<BE, Rg>
+        + CKKSMulAddOps<BE, Rg>
         + CKKSAddOps<BE, Rg>
         + CKKSSubOps<BE, Rg>
         + CKKSMulOps<BE, Rg>
@@ -311,7 +316,7 @@ where
     }
 
     match &params.f_mod_bsgs {
-        EvalModBsgs::Real(_) => {
+        EvalModBsgs::Real(_) | EvalModBsgs::Factored { .. } => {
             if let Some(consts) = params.range_extension_consts.as_ref() {
                 let steps = params.plan.f_mod_log_interval_reduction;
                 for i in 0..steps {
@@ -420,9 +425,10 @@ fn eval_mod_base<'a, R, P, F, BE, H, Rg: Ring>(
     mut scratch: ScratchArena<'a, BE>,
 ) -> Result<()>
 where
-    BE: Backend + 'a,
+    BE: Backend + GLWEMulConstImpl<Rg> + 'a,
     Module<BE>: CKKSPolynomialEvaluationOps<BE, Rg>
         + CKKSEvalModComplexOps<BE, Rg>
+        + CKKSMulAddOps<BE, Rg>
         + CKKSAddOps<BE, Rg>
         + CKKSSubOps<BE, Rg>
         + CKKSMulOps<BE, Rg>
@@ -436,11 +442,19 @@ where
 {
     match &params.f_mod_bsgs {
         // The identity transform takes `input` itself as the first power, with no copy.
-        EvalModBsgs::Real(bsgs) if bsgs.input_transform() == PolynomialInputTransform::Identity => {
+        EvalModBsgs::Factored { factors, .. } if input.slot_layout() == SlotLayout::Full => {
+            if let Some(offset) = params.f_mod_input_offset.as_ref() {
+                const_add_assign(OP, module, &mut input, offset, 0, &mut scratch)?;
+            }
+            module.ckks_eval_poly_factored(res, &input, factors, tsk, &mut scratch)
+        }
+        EvalModBsgs::Real(bsgs) | EvalModBsgs::Factored { dense: bsgs, .. }
+            if bsgs.input_transform() == PolynomialInputTransform::Identity =>
+        {
             ensure_baby_steps(OP, bsgs)?;
             eval_poly_real_on_power(module, res, input, bsgs, tsk, scratch).map(|_| ())
         }
-        EvalModBsgs::Real(bsgs) => {
+        EvalModBsgs::Real(bsgs) | EvalModBsgs::Factored { dense: bsgs, .. } => {
             if let Some(offset) = params.f_mod_input_offset.as_ref() {
                 const_add_assign(OP, module, &mut input, offset, 0, &mut scratch)?;
             }

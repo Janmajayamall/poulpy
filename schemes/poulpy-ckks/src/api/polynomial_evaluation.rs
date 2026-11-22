@@ -127,3 +127,37 @@ pub trait CKKSComplexPolynomialEvaluationOps<BE: Backend> {
         H: GetTensorKey<BE>,
         CKKSCiphertextOwned<BE>: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSCtBounds + SetCKKSInfos;
 }
+
+/// Real polynomials supplied as products, squares and weighted sums of shared factors.
+/// Encode a [`FactoredPolynomial`](crate::polynomial::FactoredPolynomial) once for repeated evaluations.
+pub trait CKKSFactoredPolynomialEvaluationOps<BE: Backend, Rg: Ring = Standard> {
+    /// Scratch bound including live factors and the widest arithmetic operation.
+    fn ckks_eval_poly_factored_tmp_bytes<R, S, P, T>(
+        &self,
+        dst: &R,
+        src: &S,
+        poly: &crate::polynomial::EncodedFactoredPolynomial<P>,
+        key: &T,
+    ) -> usize
+    where
+        R: CKKSCtBounds,
+        S: CKKSCtBounds,
+        P: CKKSCtBounds,
+        T: poulpy_core::layouts::GGLWEInfos;
+
+    /// Evaluate a prepared factorization. Replicated slots require masked constants.
+    /// The caller supplies the temporary space reported by `ckks_eval_poly_factored_tmp_bytes`.
+    fn ckks_eval_poly_factored<R, S, P, H>(
+        &self,
+        dst: &mut R,
+        src: &S,
+        poly: &crate::polynomial::EncodedFactoredPolynomial<P>,
+        key: &H,
+        scratch: &mut ScratchArena<'_, BE>,
+    ) -> Result<()>
+    where
+        R: GLWEToBackendMut<BE, Rg> + GLWEToBackendRef<BE, Rg> + CKKSCtBounds + SetCKKSInfos,
+        S: GLWEToBackendRef<BE, Rg> + CKKSCtBounds,
+        P: GLWEToBackendRef<BE, Rg> + CKKSCtBounds + IntPolyInfos + CKKSMaskedConstants<BE, Rg>,
+        H: GetTensorKey<BE, Rg>;
+}
