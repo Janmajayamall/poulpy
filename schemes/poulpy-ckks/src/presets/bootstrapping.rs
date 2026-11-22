@@ -416,6 +416,10 @@ impl BootstrappingPreset {
 
     /// Rebuild a complete set of search parameters together. Width and key derivation see
     /// the final plan, including combinations whose intermediate schedules would be invalid.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the campaign sets all dependent transform and polynomial parameters in one validation"
+    )]
     pub fn with_campaign_recipe(
         &self,
         c2s: &'static [(usize, usize)],

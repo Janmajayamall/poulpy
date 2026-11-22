@@ -1,5 +1,6 @@
 [package]
 name = "poulpy-release-bench"
+default-run = "poulpy-release-bench"
 version = "0.1.0"
 edition = "2024"
 license = "Apache-2.0"

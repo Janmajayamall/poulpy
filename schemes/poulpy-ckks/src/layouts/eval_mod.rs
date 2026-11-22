@@ -211,14 +211,14 @@ impl EvalModPlan {
         let EvalModPoly::Real(mut poly) = compiled.f_mod_poly else {
             unreachable!()
         };
-        let scale = (self.coeffs_meta.log_delta() as f64).exp2();
+        let scale = (self.coeffs_meta.log_delta() as f64).ckks_exp2();
         for c in &mut poly.coeffs {
             *c = (*c * scale).round() / scale;
         }
-        let ratio = (self.log_msg_ratio as f64).exp2();
+        let ratio = (self.log_msg_ratio as f64).ckks_exp2();
         let offset = self.input_offset::<f64>().unwrap_or_default();
         let steps = self.f_mod_log_interval_reduction;
-        let s = (1.0 / std::f64::consts::TAU).powf(1.0 / (1u64 << steps) as f64);
+        let s = (1.0 / std::f64::consts::TAU).ckks_powf(1.0 / (1u64 << steps) as f64);
         let last = i32::try_from(self.f_mod_interval - 1)?;
         let (mut worst, mut zero) = (0.0f64, 0.0f64);
         let mut slope = 0.0f64;
@@ -228,7 +228,7 @@ impl EvalModPlan {
                 let m = radius * f64::from(i) / 32.0;
                 let mut y = poly.evaluate((f64::from(wrap) + m / ratio) * self.input_scaling()? + offset);
                 for j in 0..steps {
-                    y = 2.0 * y * y - (s.powi(2 << j) * scale).round() / scale;
+                    y = 2.0 * y * y - (s.ckks_powi(2 << j) * scale).round() / scale;
                 }
                 let err = (ratio * y - m).abs();
                 ensure!(err.is_finite(), "nonfinite polynomial value");
@@ -317,7 +317,7 @@ impl EvalModPlan {
     pub fn input_scaling(&self) -> Result<f64> {
         ensure!(self.f_mod_interval > 0, "EvalModPlan: f_mod_interval must be > 0");
         let half_range = if self.eval_mod_type == EvalModType::CenteredResidue {
-            self.f_mod_interval as f64 - 1.0 + 2f64.powi(-(self.log_msg_ratio as i32))
+            self.f_mod_interval as f64 - 1.0 + 2f64.ckks_powi(-(self.log_msg_ratio as i32))
         } else {
             self.f_mod_interval as f64
         };
@@ -916,7 +916,7 @@ where
     let half_angle_fit = crate::approximation::half_angle_cos::matches_plan(&lit);
     let mut f_mod_poly: Polynomial<F> = match lit.eval_mod_type {
         EvalModType::CenteredResidue => {
-            let half = 2f64.powi(-(lit.log_msg_ratio as i32));
+            let half = 2f64.ckks_powi(-(lit.log_msg_ratio as i32));
             let last = i32::try_from(lit.f_mod_interval - 1)?;
             let intervals = (-last..=last)
                 .map(|i| (f64::from(i) - half, f64::from(i) + half))

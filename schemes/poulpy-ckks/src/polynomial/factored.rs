@@ -7,6 +7,7 @@ use crate::{
     layouts::{
         CKKSPlaintextAlloc, CKKSPlaintextOwned, MaskedCoeffs, eval_mod::encode_scalar_constants, masked::encode_masked_constants,
     },
+    numerics::CKKSFloat,
 };
 use poulpy_core::layouts::{Base2K, GetDegree};
 use poulpy_hal::layouts::{Backend, Module, Ring, ScratchArena};
@@ -171,7 +172,7 @@ impl FactoredPolynomial {
                 match update {
                     FactorUpdate::Add(v) => result += values[v],
                     FactorUpdate::AddConstant(c) => result += self.constants[c],
-                    FactorUpdate::MulPow2(bits) => result *= 2f64.powi(bits as i32),
+                    FactorUpdate::MulPow2(bits) => result *= 2f64.ckks_powi(bits as i32),
                 }
             }
             values.push(result);

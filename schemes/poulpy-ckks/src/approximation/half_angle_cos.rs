@@ -8,6 +8,7 @@
 //! product. One doubling gives (2π)^(-1/4) cos(8πx).
 use crate::{
     layouts::{EvalModPlan, EvalModType},
+    numerics::CKKSFloat,
     polynomial::{Factor, FactorStep, FactorUpdate, FactoredPolynomial, Polynomial, SplitStrategy},
 };
 
@@ -49,7 +50,7 @@ fn constants() -> Vec<f64> {
     let mut out = vec![
         quantize(Z_OFFSET),
         quantize(T_OFFSET),
-        quantize(-std::f64::consts::TAU.powf(-0.25)),
+        quantize(-std::f64::consts::TAU.ckks_powf(-0.25)),
     ];
     for (row, shift) in ROWS.iter().zip(ROW_SHIFTS) {
         out.extend(row.map(|v| quantize(v / (1 << shift) as f64)));

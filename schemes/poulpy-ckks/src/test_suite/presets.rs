@@ -366,6 +366,10 @@ where
     /// Encrypts the reference vector at the preset's input layout on the client,
     /// moves it to the evaluated backend, and runs one bootstrap to check the
     /// output width.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the fixture takes ownership of both the client and the server bootstrap resources"
+    )]
     fn with_bootstrap(
         preset: BootstrappingPreset,
         module: Module<BE>,
