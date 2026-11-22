@@ -414,6 +414,43 @@ impl BootstrappingPreset {
         )
     }
 
+    /// Rebuild a complete set of search parameters together. Width and key derivation see
+    /// the final plan, including combinations whose intermediate schedules would be invalid.
+    pub fn with_campaign_recipe(
+        &self,
+        c2s: &'static [(usize, usize)],
+        s2c: &'static [(usize, usize)],
+        scales: PresetScales,
+        family: EvalModType,
+        degree: usize,
+        steps: usize,
+        split: SplitStrategy,
+        pow2: bool,
+    ) -> Result<Self> {
+        build(
+            "with_campaign_recipe",
+            PresetSpec {
+                derived: true,
+                c2s_schedule: c2s,
+                s2c_schedule: s2c,
+                power_of_two_keys: pow2,
+                c2s_guard_bits: scales.c2s_guard_bits,
+                c2s_log_delta: scales.c2s_log_delta,
+                s2c_log_delta: scales.s2c_log_delta,
+                eval_mod: EvalModSpec {
+                    eval_mod_type: family,
+                    degree,
+                    log_interval_reduction: steps,
+                    split_strategy: split,
+                    log_delta: scales.eval_mod_log_delta,
+                    coeffs_log_delta: scales.eval_mod_coeffs_log_delta,
+                    ..self.spec.eval_mod
+                },
+                ..self.spec
+            },
+        )
+    }
+
     /// The scales of the preset.
     pub fn scales(&self) -> PresetScales {
         PresetScales {

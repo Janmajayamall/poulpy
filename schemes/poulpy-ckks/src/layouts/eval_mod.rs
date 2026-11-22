@@ -89,6 +89,8 @@ fn scalar_from_i64<F: CKKSScalar>(name: &'static str, v: i64) -> Result<F> {
 /// separately, so the recovered value sits at amplitude `scaling/(2π)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EvalModType {
+    /// Odd minimax polynomial returning the centered residue on each Han–Ki wrap interval.
+    CenteredResidue,
     /// Discrete cosine approximation following Han & Ki method (*Better Bootstrapping
     /// for Approximate Homomorphic Encryption*). Targets `1/(2π)·cos(2π·(x − 1/4)/2^r)`
     /// but fits the polynomial only at the finitely many points `x` can actually
@@ -197,6 +199,52 @@ pub struct EvalModPlan {
 }
 
 impl EvalModPlan {
+    /// Scalar diagnostic with coefficients rounded at the declared precision. Scan every wrap
+    /// used by the discrete fit, in decoded message units. Encrypted qualification is separate.
+    pub fn approximation_errors(&self, radius: f64) -> Result<(f64, f64, f64)> {
+        self.validate()?;
+        ensure!(
+            self.f_mod_inv_degree.is_none() && self.eval_mod_type != EvalModType::ExpCmplx,
+            "requires a real base with no inverse"
+        );
+        let compiled = compile_eval_mod_with::<f64, ()>(*self, &mut |_, _| Ok(()))?;
+        let EvalModPoly::Real(mut poly) = compiled.f_mod_poly else {
+            unreachable!()
+        };
+        let scale = (self.coeffs_meta.log_delta() as f64).exp2();
+        for c in &mut poly.coeffs {
+            *c = (*c * scale).round() / scale;
+        }
+        let ratio = (self.log_msg_ratio as f64).exp2();
+        let offset = self.input_offset::<f64>().unwrap_or_default();
+        let steps = self.f_mod_log_interval_reduction;
+        let s = (1.0 / std::f64::consts::TAU).powf(1.0 / (1u64 << steps) as f64);
+        let last = i32::try_from(self.f_mod_interval - 1)?;
+        let (mut worst, mut zero) = (0.0f64, 0.0f64);
+        let mut slope = 0.0f64;
+        for wrap in -last..=last {
+            let mut previous = None;
+            for i in -32..=32 {
+                let m = radius * f64::from(i) / 32.0;
+                let mut y = poly.evaluate((f64::from(wrap) + m / ratio) * self.input_scaling()? + offset);
+                for j in 0..steps {
+                    y = 2.0 * y * y - (s.powi(2 << j) * scale).round() / scale;
+                }
+                let err = (ratio * y - m).abs();
+                ensure!(err.is_finite(), "nonfinite polynomial value");
+                if let Some(last_y) = previous {
+                    slope = slope.max(f64::abs(ratio * y - last_y) * 32.0 / radius);
+                }
+                previous = Some(ratio * y);
+                worst = worst.max(err);
+                if wrap == 0 && i % 16 == 0 {
+                    zero = zero.max(err);
+                }
+            }
+        }
+        Ok((worst, zero, slope))
+    }
+
     /// Builds the unit-circle exponential used by functional bootstrapping.
     pub fn complex_exponential(
         f_mod_degree: usize,
@@ -268,7 +316,12 @@ impl EvalModPlan {
     /// Scaling of the transform feeding this EvalMod plan.
     pub fn input_scaling(&self) -> Result<f64> {
         ensure!(self.f_mod_interval > 0, "EvalModPlan: f_mod_interval must be > 0");
-        let scaling = 1.0 / self.f_mod_interval as f64;
+        let half_range = if self.eval_mod_type == EvalModType::CenteredResidue {
+            self.f_mod_interval as f64 - 1.0 + 2f64.powi(-(self.log_msg_ratio as i32))
+        } else {
+            self.f_mod_interval as f64
+        };
+        let scaling = 1.0 / half_range;
         ensure!(
             scaling.is_finite() && scaling > 0.0,
             "EvalModPlan: input scaling must be finite and > 0"
@@ -292,6 +345,14 @@ impl EvalModPlan {
             ensure!(!degree.is_multiple_of(2), "f_mod_inv_degree must be odd");
         }
         match self.eval_mod_type {
+            EvalModType::CenteredResidue => ensure!(
+                self.f_mod_degree % 2 == 1
+                    && self.f_mod_log_interval_reduction == 0
+                    && self.f_mod_inv_degree.is_none()
+                    && self.scaling.is_none()
+                    && self.log_msg_ratio > 1,
+                "direct residue needs an odd degree and disjoint wrap intervals"
+            ),
             EvalModType::CosHK | EvalModType::CosHKEven => {
                 let minimum_degree = self
                     .f_mod_interval
@@ -847,6 +908,22 @@ where
     };
 
     let mut f_mod_poly: Polynomial<F> = match lit.eval_mod_type {
+        EvalModType::CenteredResidue => {
+            let half = 2f64.powi(-(lit.log_msg_ratio as i32));
+            let last = i32::try_from(lit.f_mod_interval - 1)?;
+            let intervals = (-last..=last)
+                .map(|i| (f64::from(i) - half, f64::from(i) + half))
+                .collect::<Vec<_>>();
+            let fit =
+                crate::approximation::minimax_multi_interval(|x: f64| x - x.round(), &intervals, lit.f_mod_degree, Parity::Odd)?;
+            let coeffs = fit
+                .poly
+                .coeffs
+                .iter()
+                .map(|&x| scalar_from_f64::<F>("residue coefficient", x))
+                .collect::<Result<Vec<_>>>()?;
+            Polynomial::new_with_parity(Basis::Chebyshev, coeffs, Parity::Odd)
+        }
         EvalModType::SinCheby => {
             // Use the equivalent shifted cosine rather than an odd-only sine
             // polynomial: it evaluates the same periodic target and exercises
@@ -903,7 +980,7 @@ where
         EvalModType::SinCheby => f_mod_poly.parity = Parity::Full,
         // The phase-shifted cosine is not even, so keep all coefficients.
         EvalModType::CosCheby => f_mod_poly.parity = Parity::Full,
-        EvalModType::CosHK => {}
+        EvalModType::CosHK | EvalModType::CenteredResidue => {}
         EvalModType::CosHKEven => {
             for coeff in f_mod_poly.coeffs.iter_mut().skip(1).step_by(2) {
                 *coeff = F::zero();
@@ -912,8 +989,10 @@ where
         EvalModType::ExpCmplx => unreachable!(),
     }
 
-    for c in f_mod_poly.coeffs.iter_mut() {
-        *c = *c * s;
+    if lit.eval_mod_type != EvalModType::CenteredResidue {
+        for c in &mut f_mod_poly.coeffs {
+            *c = *c * s;
+        }
     }
 
     let polynomial = &mut |values: &[F]| encode(values, EvalModConstant::Polynomial);
