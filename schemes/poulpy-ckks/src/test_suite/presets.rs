@@ -57,6 +57,10 @@ use crate::{
     test_suite::parity::helpers::{fixture_ciphertext, poisoned_scratch, snapshot, with_scratch},
 };
 
+mod campaign_fixture;
+pub use campaign_fixture::CampaignFixture;
+use campaign_fixture::{fixture_source, key_bytes, serialized_bytes};
+
 /// Plaintext budget bits (above `log_delta`) used to measure the output precision.
 pub const PRECISION_LOG_BUDGET: usize = 8;
 
@@ -128,7 +132,7 @@ impl<BE: Backend, M> PresetRunModule<BE> for M where
 
 /// The bootstrap of a preset run: its context and keys, and those of the CI ring. It returns how many times its
 /// stages looked the tensor key up.
-type Bootstrap<BE> = Box<
+pub type Bootstrap<BE> = Box<
     dyn FnMut(
         &Module<BE>,
         &mut CKKSCiphertextOwned<BE>,
@@ -156,6 +160,9 @@ pub struct BootstrappingPresetRun<BE: Backend, BC: Backend = BE> {
     sk: GLWESecretPrepared<BC::OwnedBuf, BC>,
     want_re: Vec<f64>,
     want_im: Vec<f64>,
+    encryption_seed: Option<u64>,
+    /// Serialized key bytes, prepared key bytes, prepared rotation bytes and bootstrap scratch.
+    pub campaign_bytes: (usize, usize, usize, usize),
     /// The tensor-key lookups of the stages of the last bootstrap.
     tensor_lookups: usize,
 }
@@ -199,26 +206,64 @@ where
             + GLWETensorKeyPreparedFactory<BE, ConjugateInvariant>,
         Module<BC>: GLWECIKeyEncryptSk<BC> + TestContextSharedModule<BC, ConjugateInvariant>,
     {
+        Self::setup_with_fixture(preset, roundtrip_keys, None)
+    }
+
+    /// Configure independent test streams and input distribution for a campaign measurement.
+    pub fn setup_with_fixture(preset: BootstrappingPreset, roundtrip_keys: bool, fixture: Option<CampaignFixture>) -> Self
+    where
+        Module<BE>: GLWECIKeyPreparedFactory<BE>
+            + CKKSEncodingOps<BE, f64, ConjugateInvariant>
+            + GLWETensorKeyPreparedFactory<BE, ConjugateInvariant>,
+        Module<BC>: GLWECIKeyEncryptSk<BC> + TestContextSharedModule<BC, ConjugateInvariant>,
+    {
+        Self::setup_with_kernel(preset, roundtrip_keys, fixture, |_, _, preset, context, keys| {
+            let (plan, log_n, label) = (preset.plan().clone(), preset.log_n(), preset_label(preset));
+            let bootstrap: Bootstrap<BE> = Box::new(move |module, output, input, scratch| {
+                // The bootstrap lowers the output's width to its result.
+                let widths = plan.key_widths(log_n, output.k().as_usize(), input.k().as_usize(), input.log_delta());
+                let logged = LoggedBootstrappingKeys::new::<BE>(&keys);
+                module.ckks_bootstrap(output, input, &context, &logged, scratch)?;
+                Ok(logged.assert_lookups_at(&widths, &label))
+            });
+            (bootstrap, 0, 0, 0)
+        })
+    }
+
+    /// Install a measured CPU kernel with its additional key and workspace sizes.
+    pub fn setup_with_kernel(
+        preset: BootstrappingPreset,
+        roundtrip_keys: bool,
+        fixture: Option<CampaignFixture>,
+        build: impl FnOnce(
+            &Module<BE>,
+            &BackendGLWESecret<BC>,
+            &BootstrappingPreset,
+            BootstrappingContextPrepared<BE, f64>,
+            BootstrappingKeysPrepared<BE::OwnedBuf, BE>,
+        ) -> (Bootstrap<BE>, usize, usize, usize),
+    ) -> Self
+    where
+        Module<BE>: GLWECIKeyPreparedFactory<BE>
+            + CKKSEncodingOps<BE, f64, ConjugateInvariant>
+            + GLWETensorKeyPreparedFactory<BE, ConjugateInvariant>,
+        Module<BC>: GLWECIKeyEncryptSk<BC> + TestContextSharedModule<BC, ConjugateInvariant>,
+    {
         // On the CI ring, one module of degree 2N serves the conversions and the stages of degree N.
         let n = preset.n() as u64;
         let on_ci = matches!(preset.plan().eval_mod_ring(), EvalModRing::ConjugateInvariant { .. });
         let degree = if on_ci { 2 * n } else { n };
         let (module, client) = (Module::<BE>::new(degree), Module::<BC>::new(degree));
-        let (sk_raw, sk) = dense_secret(&client, &preset);
-        let (context, keys) = Self::compile_with_keys(&module, &client, &preset, &sk_raw, roundtrip_keys);
+        let (sk_raw, sk) = dense_secret(&client, &preset, fixture.as_ref().and_then(|f| f.key_seed));
+        let (context, keys, serialized) =
+            Self::compile_with_keys(&module, &client, &preset, &sk_raw, roundtrip_keys, fixture.as_ref());
+        let (prepared, rotations) = if fixture.is_some() { key_bytes(&keys) } else { (0, 0) };
 
         let (plan, keys_layout) = (preset.plan(), preset.keys_layout());
         let (layout, input_layout) = (preset.bootstrap_layout(), preset.input_layout());
         let client_scratch = ScratchOwned::<BC>::alloc(bootstrap_setup_tmp_bytes(&client, &layout, plan, keys_layout));
-        let (plan, log_n, label) = (plan.clone(), preset.log_n(), preset_label(&preset));
         let bytes = module.ckks_bootstrap_tmp_bytes(&layout, &input_layout, &context, keys_layout);
-        let bootstrap: Bootstrap<BE> = Box::new(move |module, output, input, scratch| {
-            // The bootstrap lowers the output's width to its result.
-            let widths = plan.key_widths(log_n, output.k().as_usize(), input.k().as_usize(), input.log_delta());
-            let logged = LoggedBootstrappingKeys::new::<BE>(&keys);
-            module.ckks_bootstrap(output, input, &context, &logged, scratch)?;
-            Ok(logged.assert_lookups_at(&widths, &label))
-        });
+        let (bootstrap, extra_wire, extra_prepared, workspace) = build(&module, &sk_raw, &preset, context, keys);
         Self::with_bootstrap(
             preset,
             module,
@@ -227,6 +272,13 @@ where
             client_scratch,
             sk,
             bootstrap,
+            fixture,
+            (
+                serialized + extra_wire,
+                prepared + extra_prepared,
+                rotations,
+                bytes + workspace,
+            ),
         )
     }
 
@@ -239,9 +291,11 @@ where
         preset: &BootstrappingPreset,
         sk_raw: &BackendGLWESecret<BC>,
         roundtrip_keys: bool,
+        fixture: Option<&CampaignFixture>,
     ) -> (
         BootstrappingContextPrepared<BE, f64>,
         BootstrappingKeysPrepared<BE::OwnedBuf, BE>,
+        usize,
     )
     where
         Module<BE>: GLWECIKeyPreparedFactory<BE>
@@ -251,7 +305,9 @@ where
     {
         let (plan, keys_layout) = (preset.plan(), preset.keys_layout());
         let bytes = keys_layout.generate_tmp_bytes(client);
-        let (mut source_xs, mut source_xa, mut source_xe) = (Source::new([7; 32]), Source::new([1; 32]), Source::new([2; 32]));
+        let seed = fixture.and_then(|f| f.key_seed);
+        let (mut source_xs, mut source_xa, mut source_xe) =
+            (fixture_source(seed, 7), fixture_source(seed, 1), fixture_source(seed, 2));
         let keys = plan
             .generate_keys(
                 client,
@@ -263,6 +319,7 @@ where
                 &mut ScratchOwned::<BC>::alloc(bytes).borrow(),
             )
             .unwrap();
+        let serialized = if fixture.is_some() { serialized_bytes(&keys) } else { 0 };
         if roundtrip_keys {
             Self::roundtrip_keys(client, &keys);
         }
@@ -271,7 +328,7 @@ where
         let keys = keys
             .transfer_and_prepare(module, &mut ScratchOwned::<BE>::alloc(bytes).borrow())
             .unwrap();
-        (context, keys)
+        (context, keys, serialized)
     }
 
     /// Writes every key of `keys` and reads it back into a fresh key of its layout, which must
@@ -309,6 +366,10 @@ where
     /// Encrypts the reference vector at the preset's input layout on the client,
     /// moves it to the evaluated backend, and runs one bootstrap to check the
     /// output width.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the fixture takes ownership of both the client and the server bootstrap resources"
+    )]
     fn with_bootstrap(
         preset: BootstrappingPreset,
         module: Module<BE>,
@@ -317,9 +378,14 @@ where
         client_scratch: ScratchOwned<BC>,
         sk: GLWESecretPrepared<BC::OwnedBuf, BC>,
         bootstrap: Bootstrap<BE>,
+        fixture: Option<CampaignFixture>,
+        campaign_bytes: (usize, usize, usize, usize),
     ) -> Self {
         let (input_layout, bootstrap_layout) = (preset.input_layout(), preset.bootstrap_layout());
-        let (want_re, want_im) = test_vector_1::<f64>(preset.n() / 2);
+        let (want_re, want_im) = match &fixture {
+            Some(f) => f.vector(preset.n() / 2),
+            None => test_vector_1::<f64>(preset.n() / 2),
+        };
         let input = module.ckks_ciphertext_alloc_from_glwe_infos(&input_layout);
         let output = module.ckks_ciphertext_alloc_from_glwe_infos(&bootstrap_layout);
 
@@ -335,6 +401,8 @@ where
             sk,
             want_re,
             want_im,
+            encryption_seed: fixture.and_then(|f| f.encryption_seed),
+            campaign_bytes,
             tensor_lookups: 0,
         };
         run.encrypt_input(SlotsKind::Complex);
@@ -364,7 +432,10 @@ where
             .unwrap();
 
         let mut client_input = client.ckks_ciphertext_alloc_from_glwe_infos(&input_layout);
-        let (mut input_xa, mut input_xe) = (Source::new([3; 32]), Source::new([4; 32]));
+        let (mut input_xa, mut input_xe) = (
+            fixture_source(self.encryption_seed, 3),
+            fixture_source(self.encryption_seed, 4),
+        );
         client
             .ckks_encrypt_sk(
                 &mut client_input,
@@ -398,6 +469,45 @@ where
         assert_eq!(self.output.k().as_usize(), self.preset.output_k());
         assert_eq!(self.output.meta().slots, SlotsKind::Real);
         self
+    }
+
+    /// Widths and scale of the actual measurement buffers.
+    pub fn measured_layout(&self) -> (usize, usize, usize, usize, usize) {
+        (
+            self.input.k().as_usize(),
+            self.output.k().as_usize(),
+            self.input.log_delta(),
+            self.output.log_delta(),
+            self.want_re.len(),
+        )
+    }
+
+    /// Fifteen bounded plaintext multiplications followed by a second bootstrap.
+    pub fn spend_and_refresh(&mut self) -> anyhow::Result<()>
+    where
+        Module<BE>: crate::api::CKKSMulOps<BE> + CKKSCopyOps<BE>,
+    {
+        use crate::api::CKKSMulOps;
+        let base = self.preset.base2k();
+        let mut pt = self.module.ckks_plaintext_alloc(1usize.into(), base.into(), 37usize.into());
+        pt.set_meta(CoeffsMeta::from_delta_budget(35, 2).meta);
+        self.module
+            .ckks_encode_coeffs_host_into(&mut pt, &[-1.0f64], &mut self.scratch.borrow())?;
+        for level in 1..=15 {
+            self.module
+                .ckks_mul_pt_const_assign(&mut self.output, &pt, 0, &mut self.scratch.borrow())?;
+            anyhow::ensure!(
+                self.output.k().as_usize() == 685 - 35 * level,
+                "unexpected circuit width at level {level}"
+            );
+        }
+        self.module
+            .ckks_copy(&mut self.input, &self.output, &mut self.scratch.borrow())?;
+        for v in self.want_re.iter_mut().chain(&mut self.want_im) {
+            *v = -*v;
+        }
+        self.bootstrap();
+        Ok(())
     }
 
     /// The preset being exercised.
@@ -460,6 +570,7 @@ where
         self.client
             .ckks_decode_slots_host_into(&output_pt, &mut got_re, &mut got_im, &mut self.client_scratch.borrow())
             .unwrap();
+        assert!(got_re.iter().chain(&got_im).all(|v| v.is_finite()), "nonfinite decoded slot");
         let log_delta = self.preset.log_delta();
         (
             precision_stats(&got_re, &self.want_re, log_delta),
@@ -818,7 +929,7 @@ where
     let sources = || (Source::new([7; 32]), Source::new([1; 32]), Source::new([2; 32]));
     for preset in [standard.clone(), powers_of_two.clone()] {
         let module = Module::<BE>::new(preset.n() as u64);
-        let (sk_raw, _) = dense_secret(&module, &preset);
+        let (sk_raw, _) = dense_secret(&module, &preset, None);
         let (plan, layout) = (preset.plan(), preset.keys_layout());
         let mut scratch = ScratchOwned::<BE>::alloc(bootstrap_setup_tmp_bytes(&module, &preset.bootstrap_layout(), plan, layout));
         let context =
@@ -867,7 +978,7 @@ where
     ] {
         let n = preset.n() as u64;
         let module = Module::<BE>::new(2 * n);
-        let (sk_raw, _) = dense_secret(&module, &preset);
+        let (sk_raw, _) = dense_secret(&module, &preset, None);
         let (plan, layout) = (preset.plan(), preset.keys_layout());
         let context = compile_context::<BE, f64>(&module, preset.base2k().into(), plan);
         let mut scratch = ScratchOwned::<BE>::alloc(layout.generate_tmp_bytes(&module));
@@ -1391,8 +1502,8 @@ where
 {
     fn new(preset: BootstrappingPreset) -> Self {
         let module = Module::<BE>::new(preset.n() as u64);
-        let (sk_raw, sk) = dense_secret(&module, &preset);
-        let (context, keys) = BootstrappingPresetRun::<BE>::compile_with_keys(&module, &module, &preset, &sk_raw, false);
+        let (sk_raw, sk) = dense_secret(&module, &preset, None);
+        let (context, keys, _) = BootstrappingPresetRun::<BE>::compile_with_keys(&module, &module, &preset, &sk_raw, false, None);
         let client_bytes = bootstrap_setup_tmp_bytes(&module, &preset.bootstrap_layout(), preset.plan(), preset.keys_layout());
         Self {
             preset,
@@ -2256,6 +2367,7 @@ where
 fn dense_secret<BC: Backend, Rg: Ring>(
     client: &Module<BC>,
     preset: &BootstrappingPreset,
+    seed: Option<u64>,
 ) -> (BackendGLWESecret<BC, Rg>, BackendGLWESecretPrepared<BC, Rg>)
 where
     Module<BC>: ModuleCoreAlloc<OwnedBuf = BC::OwnedBuf, ZnxWord = BC::ZnxWord>
@@ -2264,7 +2376,11 @@ where
 {
     let sk_layout = preset.bootstrap_layout().glwe_layout;
     let mut sk_raw = client.glwe_secret_alloc_from_infos(&sk_layout);
-    client.glwe_secret_fill_ternary_hw(&mut sk_raw, preset.dense_secret_hamming_weight(), &mut Source::new([0; 32]));
+    client.glwe_secret_fill_ternary_hw(
+        &mut sk_raw,
+        preset.dense_secret_hamming_weight(),
+        &mut fixture_source(seed, 0),
+    );
     let mut sk = client.glwe_secret_prepared_alloc_from_infos(&sk_layout);
     client.glwe_secret_prepare(&mut sk, &sk_raw);
     (sk_raw, sk)

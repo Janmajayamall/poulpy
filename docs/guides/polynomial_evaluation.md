@@ -96,6 +96,23 @@ The one-shot entry point builds and populates the power basis internally from th
 
 Chebyshev interpolation of a real function is also provided, which produces the Chebyshev coefficients of the interpolating polynomial.
 
+### Factored real polynomials
+
+A `FactoredPolynomial` describes a polynomial through intermediate squares, products and weighted sums. Value 0 is the input. Each step adds a numbered result, starting at 1, and may read any earlier value. The last result is the output. For example, these steps evaluate `(x² + 1)(x² − 1)` using one shared square.
+
+```rust
+use poulpy_ckks::polynomial::{Factor, FactorStep, FactorUpdate, FactoredPolynomial};
+
+let polynomial = FactoredPolynomial::new(vec![1.0, -1.0], vec![
+    FactorStep::new(Factor::Square(0), []),
+    FactorStep::new(Factor::Value(1), [FactorUpdate::AddConstant(0)]),
+    FactorStep::new(Factor::Value(1), [FactorUpdate::AddConstant(1)]),
+    FactorStep::new(Factor::Product(2, 3), []),
+])?;
+```
+
+`evaluate_scalar` evaluates the description in cleartext. `encode` prepares the scalar table on the destination backend. Use `encode_replicated` for masked slots or `encode_with` to supply your own encoder. Import `CKKSFactoredPolynomialEvaluationOps` from `poulpy_ckks::api`, allocate the space reported by `ckks_eval_poly_factored_tmp_bytes`, and pass the encoded polynomial to `module.ckks_eval_poly_factored`. The evaluator recycles temporary ciphertexts after their last use.
+
 ## Modulus consumption
 
 The table reports the modulus consumed by one evaluation, expressed in multiples of `log_delta`.

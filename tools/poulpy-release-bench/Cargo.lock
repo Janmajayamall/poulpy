@@ -3505,6 +3505,7 @@ dependencies = [
  "poulpy-hal",
  "poulpy-libm",
  "rayon",
+ "serde",
  "serde_json",
 ]
 

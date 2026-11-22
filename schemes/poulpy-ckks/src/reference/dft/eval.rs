@@ -325,7 +325,7 @@ where
 /// scratch and prepares the baby rotations of the current operand, then applies the
 /// unified linear-transformation eval. `P` only decides how the factor's RHS is
 /// materialized inside the eval (resident vs streamed).
-fn eval_factor<BE, P, Dst, H>(
+pub fn eval_factor<BE, P, Dst, H>(
     module: &Module<BE>,
     running: &mut Dst,
     factor: &LinearTransformation<P>,
