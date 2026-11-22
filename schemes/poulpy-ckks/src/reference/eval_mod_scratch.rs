@@ -2,7 +2,7 @@ use poulpy_core::layouts::{
     Base2K, Degree, GGLWEInfos, GLWEInfos, GLWEPlaintextInfos, GLWEPlaintextMeta, LWEInfos, Rank, Scale, TorusPrecision,
 };
 use poulpy_core::oep::{GLWEMulConstImpl, GLWEMulPlainImpl};
-use poulpy_core::{GLWEBytesOf, GLWECopy, GLWENormalize};
+use poulpy_core::{GLWEBytesOf, GLWECopy, GLWENormalize, GLWETensoring};
 use poulpy_hal::api::{CnvOps, VecZnxBigNormalizeTmpBytes, VecZnxIdftApplyTmpBytes, VecZnxRshTmpBytes};
 use poulpy_hal::layouts::{Backend, Module, Ring};
 
@@ -80,7 +80,8 @@ where
         + VecZnxIdftApplyTmpBytes
         + GLWEBytesOf<BE>
         + CKKSRoundOps<BE, Rg>
-        + CKKSMulAddOps<BE, Rg>,
+        + CKKSMulAddOps<BE, Rg>
+        + GLWETensoring<BE, Rg>,
     R: CKKSCtBounds,
     C: CKKSCtBounds,
     P: CKKSCtBounds,

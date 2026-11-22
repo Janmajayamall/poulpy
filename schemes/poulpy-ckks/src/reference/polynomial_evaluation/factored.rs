@@ -1,5 +1,5 @@
 use crate::{
-    CKKSCtBounds, CKKSResult as Result, SetCKKSInfos, SlotLayout,
+    CKKSCtBounds, CKKSInfos, CKKSResult as Result, SetCKKSInfos, SlotLayout,
     api::{CKKSAddOps, CKKSCopyOps, CKKSFactoredPolynomialEvaluationOps, CKKSMulAddOps, CKKSMulOps, CKKSPow2Ops},
     ckks_ensure_operand,
     layouts::{
@@ -10,6 +10,7 @@ use crate::{
     polynomial::{EncodedFactoredPolynomial, Factor, FactorStep, FactorUpdate},
 };
 use poulpy_core::{
+    GLWETensoring,
     layouts::{
         GGLWEInfos, GLWEInfos, GLWEPlaintextInfos, GLWEToBackendMut, GLWEToBackendRef, GetTensorKey, IntPolyInfos, LWEInfos, SetK,
     },
@@ -27,7 +28,12 @@ fn buffer_bytes<BE: Backend>(src: &impl CKKSCtBounds) -> usize {
 
 impl<BE: Backend + GLWEMulConstImpl<Rg>, Rg: Ring> CKKSFactoredPolynomialEvaluationOps<BE, Rg> for Module<BE>
 where
-    Self: CKKSAddOps<BE, Rg> + CKKSMulOps<BE, Rg> + CKKSMulAddOps<BE, Rg> + CKKSCopyOps<BE, Rg> + CKKSPow2Ops<BE, Rg>,
+    Self: CKKSAddOps<BE, Rg>
+        + CKKSMulOps<BE, Rg>
+        + CKKSMulAddOps<BE, Rg>
+        + CKKSCopyOps<BE, Rg>
+        + CKKSPow2Ops<BE, Rg>
+        + GLWETensoring<BE, Rg>,
 {
     fn ckks_eval_poly_factored_tmp_bytes<R, S, P, T>(
         &self,
@@ -150,7 +156,12 @@ fn evaluate_step<'v, BE, Rg, R, P, H>(
 where
     BE: Backend + GLWEMulConstImpl<Rg> + 'v,
     Rg: Ring,
-    Module<BE>: CKKSAddOps<BE, Rg> + CKKSMulOps<BE, Rg> + CKKSMulAddOps<BE, Rg> + CKKSCopyOps<BE, Rg> + CKKSPow2Ops<BE, Rg>,
+    Module<BE>: CKKSAddOps<BE, Rg>
+        + CKKSMulOps<BE, Rg>
+        + CKKSMulAddOps<BE, Rg>
+        + CKKSCopyOps<BE, Rg>
+        + CKKSPow2Ops<BE, Rg>
+        + GLWETensoring<BE, Rg>,
     R: GLWEToBackendMut<BE, Rg> + GLWEToBackendRef<BE, Rg> + CKKSCtBounds + SetCKKSInfos,
     P: GLWEToBackendRef<BE, Rg> + CKKSCtBounds + IntPolyInfos + CKKSMaskedConstants<BE, Rg>,
     H: GetTensorKey<BE, Rg>,
@@ -158,6 +169,16 @@ where
     match &step.factor {
         Factor::Value(v) => module.ckks_copy(out, &get(*v), scratch)?,
         Factor::Square(v) => module.ckks_square_into(out, &get(*v), key, scratch)?,
+        Factor::GuardedSquare { value, guard_bits } => {
+            let src = get(*value);
+            let bits = *guard_bits as usize;
+            ckks_ensure_operand!(
+                OP,
+                src.slot_layout() == SlotLayout::Full && bits <= src.log_delta(),
+                "guarded square needs full packing and at most one input scale of guard bits"
+            );
+            crate::reference::mul::square_wide_into(OP, module, out, &src, key, bits, scratch)?;
+        }
         Factor::Product(a, b) => module.ckks_mul_into(out, &get(*a), &get(*b), key, scratch)?,
         Factor::WeightedSum(weights) => {
             let operands: Vec<_> = weights.iter().map(|&(v, _)| get(v)).collect();
@@ -191,6 +212,21 @@ where
             FactorUpdate::Add(v) => module.ckks_add_assign(out, &get(v), scratch)?,
             FactorUpdate::AddConstant(c) => const_add_assign(OP, module, out, constants, c, scratch)?,
             FactorUpdate::MulPow2(bits) => module.ckks_mul_pow2_assign(bits as usize, out, scratch)?,
+            FactorUpdate::MulPow2AtFixedWidth(bits) => {
+                let scale = crate::error::checked_log_budget_sub(OP, out.log_delta(), bits as usize)?;
+                let mut meta = out.meta();
+                meta.scale = crate::Scale::Log(scale);
+                out.set_meta(meta);
+            }
+            FactorUpdate::DropPrecision(bits) => {
+                ckks_ensure_operand!(
+                    OP,
+                    out.slot_layout() == SlotLayout::Full,
+                    "dropping precision needs full packing"
+                );
+                let scale = crate::error::checked_log_budget_sub(OP, out.log_delta(), bits as usize)?;
+                out.set_log_delta(scale);
+            }
         }
     }
     Ok(())

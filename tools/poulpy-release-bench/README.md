@@ -122,3 +122,39 @@ poulpy-release-bench run --backend NTT4x30NeonRayon --blas matmul_d64 [--warmup 
 
 `list` prints the backends of the build with the suites each one runs, the release presets and the libm and blas cases.
 `run` prints one JSON object: the suite, the backend, its crate and features, the thread count, the preset or case and its parameters, the modulus of a case, the setup time, the time of every warm-up and timed iteration, and the precision.
+
+## Campaign 1 Han–Ki finalist
+
+The `ckks-campaign` binary benchmarks one full `N = 65536` bootstrap on the AVX2/FMA Rayon backend. Stock and `2-han_ki-04` both refresh 32,768 complex slots from 160 to 685 bits at scale `2^35`. The finalist trades larger prepared keys for lower online latency. Omitting `control` selects the phase-one finalist from PR #4.
+
+1. **SlotsToCoeffs.** For each nonidentity diagonal `D_j`, key generation encrypts `D_j σ_j(s)`. Each of the four factors transforms the input body and mask once. The rotated mask contributes a gadget product and the rotated body a pointwise plaintext product. Summing in NTT form leaves one inverse transform and normalization per output component. This uses 89 weighted switch products across the four factors, compared with 32 ordinary BSGS rotations in stock.
+2. **ModUp and CoeffsToSlots.** The first factor takes four FFT layers at the raise, up from three. This doubles the short-input sparse-to-dense switches from 8 to 16, which can run in parallel. The next factor at the raised width shrinks from 15 diagonals to 7 and from 6 nonidentity BSGS rotations to 4.
+3. **EvalMod.** The octic and sextic factors share powers of `x²`. Counting the double-angle steps, stock uses seven ciphertext squares and five general ciphertext products. Both Han–Ki finalists use seven squares and two general products, saving three relinearizations. The phase-two fit retains four guard bits in the first square and drops the factors to a 56-bit log scale before their product. Both bootstraps have depth 8.
+
+Run from the root of this PR on an x86-64 host with AVX2 and FMA. The separate stock worktree pins PR #4 before the shared ModUp change. For a pinned run on Linux, start the shell with `taskset -c 0,1,3,6,8,10 bash`, substituting six CPU IDs on your host.
+
+```sh
+git worktree add --detach ../poulpy-pr4-stock 08e202b735ebe0253b5a0ebd9b557c4d6f2ac39d
+export RUSTFLAGS='-C target-feature=+avx2,+fma' RAYON_NUM_THREADS=6
+bench() {
+  printf '{"mode":"%s","control":"%s","radius":1,"key_seed":%s,"encryption_seed":%s,"vector_seed":%s,"warmup":3,"iters":5}\n' \
+    "${4:-measure}" "$2" "$3" "$3" "$3" |
+    (cd "$1" && cargo run --quiet --locked --release --features avx \
+      --manifest-path tools/poulpy-release-bench/Cargo.toml --bin ckks-campaign)
+}
+bench ../poulpy-pr4-stock stock 7321 > stock-7321.json
+bench . 2-han_ki-04 7321 > finalist-7321.json
+bench . 2-han_ki-04 9001 > finalist-9001.json
+bench ../poulpy-pr4-stock stock 9001 > stock-9001.json
+```
+
+Each run has three warm-ups and five timed calls. Pool the ten `samples_ns` per implementation to compare warm medians. Setup, key preparation and precision checks run outside the timed region.
+
+```sh
+jq -es 'select(all(.[]; .qualified)) | map(.samples_ns[]) | sort | (.[4] + .[5]) / 2e9' stock-7321.json stock-9001.json
+jq -es 'select(all(.[]; .qualified)) | map(.samples_ns[]) | sort | (.[4] + .[5]) / 2e9' finalist-7321.json finalist-9001.json
+bench . 2-han_ki-04 7321 finalist
+bench . 2-han_ki-04 9001 finalist
+```
+
+The last two commands check a second bootstrap after spending all 525 restored bits on a 15-level circuit. A qualifying run reaches at least 19 bits on the first bootstrap and 18.5 bits on the second across every real and imaginary slot component.

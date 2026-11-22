@@ -12,13 +12,13 @@ use crate::{
     polynomial::{Factor, FactorStep, FactorUpdate, FactoredPolynomial, Polynomial, SplitStrategy},
 };
 
-const COEFF_BITS: usize = 48;
-const Z_OFFSET: f64 = -1.0393581216405625;
-const T_OFFSET: f64 = 3.1888881758792054;
+pub(super) const COEFF_BITS: usize = 48;
+pub(super) const Z_OFFSET: f64 = -1.0393581216405625;
+pub(super) const T_OFFSET: f64 = 3.1888881758792054;
 
 // Rows in [1, z, t, q], where z=x²+Z_OFFSET, t=z²+T_OFFSET, q=t².
 // R is row 0, the sextic is q·row 1 + row 2, and the octic is R² + row 3.
-const ROWS: [[f64; 4]; 4] = [
+pub(super) const ROWS: [[f64; 4]; 4] = [
     [9.325560552093284, 0.4817162938382348, -6.222621604398572, 1.0],
     [-18.335325005155592, 28.88602830977092, 5.7497547715358115, 0.0],
     [66.09443599733765, -100.23837443798192, -228.61141067592172, 68.74002734954928],
@@ -39,7 +39,7 @@ pub(crate) fn matches_plan(p: &EvalModPlan) -> bool {
         && p.scaling.is_none()
         && p.f_mod_inv_degree.is_none()
         && p.coeffs_meta.log_delta() == COEFF_BITS
-        && p.f_mod_log_delta == 59
+        && matches!(p.f_mod_log_delta, 59 | super::balanced_half_angle::LOG_DELTA)
         && p.coeffs_meta.log_budget() >= 4
 }
 

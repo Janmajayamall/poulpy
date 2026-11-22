@@ -16,12 +16,14 @@
 //! sparse one, and these switches replace the sparse-to-dense one.
 
 use poulpy_core::{
-    GLWEBytesOf, GLWECopy, GLWEKeyswitch, GLWEMulPreparedPlainSum, GLWENormalize, GLWEShift, GLWESwitchDegree,
-    ScratchArenaTakeGLWE, gglwe_product_accumulation_output_size, glwe_left_operand_prepare, glwe_left_operand_prepare_tmp_bytes,
+    GLWEBytesOf, GLWECopy, GLWEKeyswitch, GLWENormalize, GLWEShift, GLWESwitchDegree, ScratchArenaTakeGLWE,
+    cnv_offset_to_limb_offset, gglwe_product_accumulation_output_size, glwe_left_operand_prepare,
+    glwe_left_operand_prepare_tmp_bytes,
     layouts::{
         GGLWEInfos, GLWEInfos, GLWELayout, GLWEToBackendMut, GLWEToBackendRef, IntPolyInfos, LWEInfos, LinearTransformation,
         Rank, prepared::GGLWEPreparedToBackendRef,
     },
+    prod_dft_size,
 };
 use poulpy_hal::{
     api::{
@@ -29,14 +31,15 @@ use poulpy_hal::{
         VecZnxAutomorphism, VecZnxCopy, VecZnxDftAddAssign, VecZnxDftBytesOf, VecZnxIdftNormalize, VecZnxIdftNormalizeTmpBytes,
         VecZnxNormalize, VecZnxNormalizeTmpBytes,
     },
+    execution::{for_each_with_scratch, worker_count},
     layouts::{
-        Backend, CyclotomicOrder, Module, PrepareHint, ScratchArena, Standard, VecZnxDftToBackendMut, VecZnxToBackendRef,
-        galois_element,
+        Backend, CnvPVecLToBackendRef, CnvPVecRToBackendRef, CyclotomicOrder, Module, PrepareHint, ScratchArena, Standard,
+        VecZnxDftToBackendMut, VecZnxDftToBackendRef, VecZnxToBackendRef, galois_element,
     },
 };
 
 use crate::{
-    CKKSCtBounds, CKKSResult as Result, GLWEPlaintextMeta, Scale, SetCKKSInfos, ckks_ensure_operand,
+    CKKSCtBounds, CKKSInfos, CKKSResult as Result, GLWEPlaintextMeta, Scale, SetCKKSInfos, ckks_ensure_operand,
     layouts::{
         BootstrappingLinearKeys, CKKSRightOperandPrepared,
         validation::{FirstFactorRaise, check_first_factor_raise, first_factor_key, small_limbs},
@@ -99,7 +102,6 @@ pub trait CKKSModUpFirstFactorReference<BE: Backend> {
     ) -> usize
     where
         Module<BE>: GLWEKeyswitch<BE>
-            + GLWEMulPreparedPlainSum<BE>
             + GLWEShift<BE>
             + GLWENormalize<BE>
             + GLWEBytesOf<BE>
@@ -137,10 +139,11 @@ pub trait CKKSModUpFirstFactorReference<BE: Backend> {
             + VecZnxAddAssign<BE>
             + VecZnxDftAddAssign<BE>
             + VecZnxNormalize<BE>
+            + VecZnxNormalizeTmpBytes
             + VecZnxIdftNormalize<BE>
+            + VecZnxIdftNormalizeTmpBytes
             + CnvOps<BE>
             + GLWENormalize<BE>
-            + GLWEMulPreparedPlainSum<BE>
             + CyclotomicOrder,
         K: BootstrappingLinearKeys<BE>,
         Dst: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSCtBounds + SetCKKSInfos,
@@ -159,7 +162,6 @@ impl<BE: Backend> CKKSModUpFirstFactorReference<BE> for Module<BE> {
     ) -> usize
     where
         Module<BE>: GLWEKeyswitch<BE>
-            + GLWEMulPreparedPlainSum<BE>
             + GLWEShift<BE>
             + GLWENormalize<BE>
             + GLWEBytesOf<BE>
@@ -196,10 +198,11 @@ impl<BE: Backend> CKKSModUpFirstFactorReference<BE> for Module<BE> {
             + VecZnxAddAssign<BE>
             + VecZnxDftAddAssign<BE>
             + VecZnxNormalize<BE>
+            + VecZnxNormalizeTmpBytes
             + VecZnxIdftNormalize<BE>
+            + VecZnxIdftNormalizeTmpBytes
             + CnvOps<BE>
             + GLWENormalize<BE>
-            + GLWEMulPreparedPlainSum<BE>
             + CyclotomicOrder,
         K: BootstrappingLinearKeys<BE>,
         Dst: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSCtBounds + SetCKKSInfos,
@@ -224,7 +227,6 @@ pub fn ckks_mod_up_first_factor_tmp_bytes_reference<BE, Dst, Src, D2S, K>(
 where
     BE: Backend,
     Module<BE>: GLWEKeyswitch<BE>
-        + GLWEMulPreparedPlainSum<BE>
         + GLWEShift<BE>
         + GLWENormalize<BE>
         + GLWEBytesOf<BE>
@@ -262,20 +264,26 @@ where
         key_infos,
         factor.giant_steps.len(),
     );
-    let carved = 3 * BE::scratch_aligned(BE::vec_znx_bytes_of(n, 2, small))
+    let diagonal_size = diagonal_limbs(diagonal, base2k);
+    let (offset, _) = cnv_offset_to_limb_offset(diagonal.encoded_k().as_usize().saturating_sub(diagonal.log_delta()), base2k);
+    let product_size = prod_dft_size(small, diagonal_size, offset);
+    let carved = 3 * BE::scratch_aligned(module.glwe_bytes_of_from_infos(&small_layout))
         + BE::scratch_aligned(module.cnv_pvec_left_bytes_of(n, 2, small, PrepareHint::Reuse))
         + BE::scratch_aligned(BE::vec_znx_bytes_of(n, 1, small))
         + BE::scratch_aligned(BE::vec_znx_bytes_of(n, 1, acc_size))
-        + module.vec_znx_dft_bytes_of(n, 2, acc_size);
-    let diagonal_size = diagonal_limbs(diagonal, base2k);
-    let product = module.glwe_mul_prepared_plain_sum_tmp_bytes(&small_layout, small, diagonal_size);
+        + BE::scratch_aligned(module.vec_znx_dft_bytes_of(n, 2, acc_size));
+    let product = BE::scratch_aligned(module.vec_znx_dft_bytes_of(n, 1, product_size))
+        + module
+            .cnv_apply_dft_tmp_bytes(offset, product_size, small, diagonal_size)
+            .max(module.vec_znx_idft_normalize_tmp_bytes(small, product_size));
     let ops = glwe_left_operand_prepare_tmp_bytes(module, small, &small_layout)
         .max(product)
         .max(module.glwe_keyswitch_dft_add_tmp_bytes(acc_size, &small_layout, key_infos))
+        .max(module.glwe_keyswitch_dft_tmp_bytes(acc_size, &small_layout, key_infos))
         .max(module.glwe_shift_tmp_bytes(small))
         .max(module.vec_znx_normalize_tmp_bytes())
         .max(module.vec_znx_idft_normalize_tmp_bytes(dst_infos.size(), acc_size));
-    d2s.max(carved + ops)
+    d2s.max(carved + BE::scratch_aligned(ops))
 }
 
 /// Raises `src` to the precision of `dst` and applies `factor`, the first
@@ -311,10 +319,11 @@ where
         + VecZnxAddAssign<BE>
         + VecZnxDftAddAssign<BE>
         + VecZnxNormalize<BE>
+        + VecZnxNormalizeTmpBytes
         + VecZnxIdftNormalize<BE>
+        + VecZnxIdftNormalizeTmpBytes
         + CnvOps<BE>
         + GLWENormalize<BE>
-        + GLWEMulPreparedPlainSum<BE>
         + CyclotomicOrder,
     K: BootstrappingLinearKeys<BE>,
     Dst: GLWEToBackendMut<BE> + GLWEToBackendRef<BE> + CKKSCtBounds + SetCKKSInfos,
@@ -357,6 +366,21 @@ where
         keys,
     )?;
 
+    let n = dst.n().as_usize();
+    let diagonal_size = diagonal_limbs(&factor.giant_steps[0].diagonals[0].plaintext, base2k);
+    ckks_ensure_operand!(
+        OP,
+        factor.giant_steps.iter().all(|g| {
+            let rhs = g.diagonals[0].plaintext.cnv();
+            rhs.cols() == 1
+                && rhs.size() == diagonal_size
+                && rhs.n().is_power_of_two()
+                && rhs.n() >= BE::MIN_DEGREE
+                && n.is_multiple_of(rhs.n())
+        }),
+        "first-factor diagonals must be plaintexts of the encoded width at a degree dividing the ciphertext degree"
+    );
+
     // The raise runs under the sparse secret when the keys encapsulate it.
     if let Some((dense_to_sparse, _)) = keys.encapsulation_keys() {
         module.glwe_keyswitch_assign(src, &dense_to_sparse.to_backend_ref(), scratch);
@@ -385,16 +409,11 @@ where
         &key_layout,
         factor.giant_steps.len(),
     );
-    let n = dst.n().as_usize();
 
     {
         let scratch = scratch.borrow();
         let (mut raised, scratch) = scratch.take_glwe_scratch(&small_layout);
-        let (mut product, scratch) = scratch.take_glwe_scratch(&small_layout);
-        let (mut rotated, scratch) = scratch.take_glwe_scratch(&small_layout);
-        let (mut bodies, scratch) = scratch.take_vec_znx_scratch(n, 1, small);
         let (mut lowered, scratch) = scratch.take_vec_znx_scratch(n, 1, acc_size);
-        let (mut acc, scratch) = scratch.take_vec_znx_dft_scratch(n, 2, acc_size);
         let (mut raised_prepared, mut scratch) = scratch.take_cnv_pvec_left_scratch(n, 2, small, PrepareHint::Reuse);
 
         // The raise: the ciphertext as integers, its last bit `guard` bits (and the
@@ -406,42 +425,108 @@ where
             &mut raised,
             &mut scratch.borrow(),
         );
-        // Every diagonal multiplies the same ciphertext: it is prepared once.
-        glwe_left_operand_prepare(module, &mut raised_prepared, &raised, small * base2k, &mut scratch.borrow());
+        glwe_left_operand_prepare(module, &mut raised_prepared, &raised, small * base2k, &mut scratch);
+        let raised_prepared = raised_prepared.to_backend_ref();
 
-        for (index, giant) in factor.giant_steps.iter().enumerate() {
-            // Product and division by the diagonal's scale, at the same width.
-            let diagonal = &giant.diagonals[0].plaintext;
-            module.glwe_mul_prepared_plain_sum(
-                growth,
-                &mut product,
-                &[&raised_prepared],
-                small,
-                &[diagonal],
-                diagonal_limbs(diagonal, base2k),
-                &[1],
-                base2k.into(),
-                &mut scratch.borrow(),
-            );
+        // The small products and switches are independent until the sum. Use surplus
+        // bootstrap workspace for private partial sums when the executor can run them together.
+        // The single-worker path fits the ordinary first-factor scratch query.
+        let count = factor.giant_steps.len();
+        let factor_keys = factor
+            .giant_steps
+            .iter()
+            .map(|g| Ok(first_factor_key(OP, keys, g.rot)?.to_backend_ref()))
+            .collect::<Result<Vec<_>>>()?;
+        let (offset, shift) = cnv_offset_to_limb_offset(growth, base2k);
+        let product_size = prod_dft_size(small, diagonal_size, offset);
+        let local_arrays = 2 * BE::scratch_aligned(BE::vec_znx_bytes_of(n, 2, small));
+        let product_bytes = BE::scratch_aligned(BE::vec_znx_dft_bytes_of(n, 1, product_size))
+            + module
+                .cnv_apply_dft_tmp_bytes(offset, product_size, small, diagonal_size)
+                .max(module.vec_znx_idft_normalize_tmp_bytes(small, product_size));
+        let local_work = product_bytes
+            .max(module.glwe_keyswitch_dft_add_tmp_bytes(acc_size, &small_layout, &key_layout))
+            .max(module.glwe_keyswitch_dft_tmp_bytes(acc_size, &small_layout, &key_layout));
+        let task_bytes = local_arrays + BE::scratch_aligned(local_work);
+        let partial_bytes = BE::scratch_aligned(BE::vec_znx_bytes_of(n, 1, small))
+            + BE::scratch_aligned(BE::vec_znx_dft_bytes_of(n, 2, acc_size));
+        let finalize = module
+            .vec_znx_normalize_tmp_bytes()
+            .max(module.vec_znx_idft_normalize_tmp_bytes(dst.size(), acc_size));
+        let available = scratch.available();
+        let workers = worker_count::<BE::TaskExecutor>(6, count)
+            .min(available / (task_bytes + partial_bytes))
+            .min(available.saturating_sub(finalize) / partial_bytes)
+            .max(1);
+        let (accumulators, scratch) = scratch.take_vec_znx_dft_slice_scratch(n, workers, 2, acc_size);
+        let (body_sums, mut scratch) = scratch.take_vec_znx_slice_scratch(n, workers, 1, small);
+        let mut tasks: Vec<_> = accumulators.into_iter().zip(body_sums).collect();
+        let (arenas, _) = scratch.borrow().split(workers, task_bytes);
 
-            // The rotation needs no key before the switch.
-            let term = if giant.rot == 0 {
-                &product
-            } else {
-                glwe_automorphism_keyless(module, &mut rotated, galois_element(giant.rot, order), &product);
-                &rotated
-            };
+        for_each_with_scratch::<BE::TaskExecutor, BE, _, _>(&mut tasks, 0, arenas, &|group, (acc, bodies), arena| {
+            let (mut product, arena) = arena.borrow().take_glwe_scratch(&small_layout);
+            let (mut rotated, mut scratch) = arena.take_glwe_scratch(&small_layout);
+            let start = group * count / workers;
+            let end = (group + 1) * count / workers;
+            for (index, giant) in factor.giant_steps[start..end].iter().enumerate() {
+                // Product and division by the diagonal's scale, at the same width.
+                let diagonal = &giant.diagonals[0].plaintext;
+                product.set_canonical(true);
+                {
+                    let (mut dft, mut temp) = scratch.borrow().take_vec_znx_dft_scratch(n, 1, product_size);
+                    for col in 0..2 {
+                        module.cnv_apply_dft(
+                            offset,
+                            &mut dft,
+                            0,
+                            &raised_prepared,
+                            col,
+                            &diagonal.to_backend_ref(),
+                            0,
+                            1,
+                            &mut temp,
+                        );
+                        module.vec_znx_idft_normalize(
+                            product.data_mut(),
+                            base2k,
+                            small * base2k,
+                            shift,
+                            col,
+                            &mut dft,
+                            0,
+                            base2k,
+                            None,
+                            &mut temp,
+                        );
+                    }
+                }
 
-            // The masked part of the switch joins the others in the transform domain;
-            // the bodies are summed limb by limb, their integer part kept.
-            let key = first_factor_key(OP, keys, giant.rot)?.to_backend_ref();
-            let term_ref = term.to_backend_ref();
-            if index == 0 {
-                module.glwe_keyswitch_dft(&mut acc.to_backend_mut(), term, &key, &mut scratch.borrow());
-                module.vec_znx_copy(&mut bodies, 0, term_ref.data(), 0);
-            } else {
-                module.glwe_keyswitch_dft_add(&mut acc.to_backend_mut(), term, &key, &mut scratch.borrow());
-                module.vec_znx_add_assign(&mut bodies, 0, term_ref.data(), 0);
+                // The rotation needs no key before the switch.
+                let term = if giant.rot == 0 {
+                    &product
+                } else {
+                    glwe_automorphism_keyless(module, &mut rotated, galois_element(giant.rot, order), &product);
+                    &rotated
+                };
+
+                // The masked part of the switch joins the others in the transform domain;
+                // the bodies are summed limb by limb, their integer part kept.
+                let key = &factor_keys[start + index];
+                let term_ref = term.to_backend_ref();
+                if index == 0 {
+                    module.glwe_keyswitch_dft(&mut acc.to_backend_mut(), term, key, &mut scratch.borrow());
+                    module.vec_znx_copy(bodies, 0, term_ref.data(), 0);
+                } else {
+                    module.glwe_keyswitch_dft_add(&mut acc.to_backend_mut(), term, key, &mut scratch.borrow());
+                    module.vec_znx_add_assign(bodies, 0, term_ref.data(), 0);
+                }
+            }
+        });
+        let ((acc, bodies), rest) = tasks.split_first_mut().unwrap();
+        for (partial, body) in rest {
+            module.vec_znx_add_assign(bodies, 0, &body.to_backend_ref(), 0);
+            for col in 0..2 {
+                module.vec_znx_dft_add_assign(acc, col, &partial.to_backend_ref(), col);
             }
         }
 

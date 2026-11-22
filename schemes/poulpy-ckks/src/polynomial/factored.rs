@@ -18,6 +18,13 @@ pub enum Factor {
     /// Start with an earlier value.
     Value(usize),
     Square(usize),
+    /// Square a full-layout value, retaining extra low bits in the output scale.
+    GuardedSquare {
+        /// Index of the input value to square.
+        value: usize,
+        /// Extra bits retained beyond the input scale, up to the input log scale.
+        guard_bits: u32,
+    },
     Product(usize, usize),
     /// A nonempty sum of (value index, scalar coefficient index) pairs.
     WeightedSum(Vec<(usize, usize)>),
@@ -29,6 +36,10 @@ pub enum FactorUpdate {
     Add(usize),
     AddConstant(usize),
     MulPow2(u32),
+    /// Multiply by a power of two by lowering the scale at fixed torus width.
+    MulPow2AtFixedWidth(u32),
+    /// Discard low precision bits of a full-layout value, preserving its homomorphic budget.
+    DropPrecision(u32),
 }
 
 #[derive(Clone, Debug)]
@@ -76,7 +87,7 @@ impl FactoredPolynomial {
                 Ok(())
             };
             match &step.factor {
-                Factor::Value(v) | Factor::Square(v) => reference(*v)?,
+                Factor::Value(v) | Factor::Square(v) | Factor::GuardedSquare { value: v, .. } => reference(*v)?,
                 Factor::Product(a, b) => {
                     reference(*a)?;
                     reference(*b)?;
@@ -93,7 +104,9 @@ impl FactoredPolynomial {
                 match update {
                     FactorUpdate::Add(v) => reference(v)?,
                     FactorUpdate::AddConstant(c) => coefficient(c)?,
-                    FactorUpdate::MulPow2(bits) => ensure!(bits <= i32::MAX as u32, "power of two exceeds exponent range"),
+                    FactorUpdate::MulPow2(bits) | FactorUpdate::MulPow2AtFixedWidth(bits) | FactorUpdate::DropPrecision(bits) => {
+                        ensure!(bits <= i32::MAX as u32, "power of two exceeds exponent range")
+                    }
                 }
             }
         }
@@ -118,9 +131,12 @@ impl FactoredPolynomial {
     }
 
     pub(crate) fn has_products(&self) -> bool {
-        self.steps
-            .iter()
-            .any(|s| matches!(s.factor, Factor::Square(_) | Factor::Product(_, _)))
+        self.steps.iter().any(|s| {
+            matches!(
+                s.factor,
+                Factor::Square(_) | Factor::GuardedSquare { .. } | Factor::Product(_, _)
+            )
+        })
     }
 
     pub(crate) fn coefficient_count(&self) -> usize {
@@ -129,33 +145,85 @@ impl FactoredPolynomial {
 
     /// Multiplicative levels on the longest dependency chain, including coefficient products.
     pub fn eval_depth(&self) -> usize {
-        self.required_budget_bits(1, 1)
+        self.precision_profile(1, 1).depth
     }
 
     /// Minimum input budget for all factors at the given log scales and natural output widths.
-    /// A square or ciphertext product spends the input scale, and a weighted sum spends the coefficient scale once.
     pub fn required_budget_bits(&self, input_log_delta: usize, coeff_log_delta: usize) -> usize {
-        let mut used = vec![0usize];
-        for step in &self.steps {
-            let mut cost = match &step.factor {
-                Factor::Value(v) => used[*v],
-                Factor::Square(v) => used[*v].saturating_add(input_log_delta),
-                Factor::Product(a, b) => used[*a].max(used[*b]).saturating_add(input_log_delta),
-                Factor::WeightedSum(terms) => terms
-                    .iter()
-                    .map(|&(v, _)| used[v])
-                    .max()
-                    .unwrap()
-                    .saturating_add(coeff_log_delta),
-            };
-            for update in &step.updates {
-                if let FactorUpdate::Add(v) = update {
-                    cost = cost.max(used[*v]);
+        self.precision_profile(input_log_delta, coeff_log_delta).required_bits
+    }
+
+    /// Track the natural output scale separately from the maximum budget used anywhere.
+    /// At fixed width, lowering the scale gains budget, including on an early input copy.
+    pub(crate) fn precision_profile(&self, input_scale: usize, coeff_scale: usize) -> FactorPrecision {
+        #[derive(Clone, Copy)]
+        struct Value {
+            spent: i128,
+            scale: usize,
+            depth: usize,
+        }
+
+        impl Value {
+            fn align(self, other: Self) -> Self {
+                Self {
+                    spent: self.spent.max(other.spent),
+                    scale: self.scale.min(other.scale),
+                    depth: self.depth.max(other.depth),
                 }
             }
-            used.push(cost);
+
+            fn product(mut self, bits: usize) -> Self {
+                self.spent += bits as i128;
+                self.depth += 1;
+                self
+            }
         }
-        used.into_iter().max().unwrap()
+
+        let mut values = vec![Value {
+            spent: 0,
+            scale: input_scale,
+            depth: 0,
+        }];
+        let mut peak = 0;
+        let mut depth = 0;
+        for step in &self.steps {
+            let mut out = match &step.factor {
+                Factor::Value(v) => values[*v],
+                Factor::Square(v) => values[*v].product(values[*v].scale),
+                Factor::GuardedSquare { value, guard_bits } => {
+                    let mut out = values[*value].product(values[*value].scale);
+                    out.scale = out.scale.saturating_add(*guard_bits as usize);
+                    out
+                }
+                Factor::Product(a, b) => values[*a].align(values[*b]).product(values[*a].scale.max(values[*b].scale)),
+                Factor::WeightedSum(terms) => terms
+                    .iter()
+                    .map(|&(v, _)| values[v])
+                    .reduce(Value::align)
+                    .unwrap()
+                    .product(coeff_scale),
+            };
+            peak = peak.max(out.spent);
+            for &update in &step.updates {
+                match update {
+                    FactorUpdate::Add(v) => out = out.align(values[v]),
+                    FactorUpdate::MulPow2AtFixedWidth(bits) => {
+                        out.scale = out.scale.saturating_sub(bits as usize);
+                        out.spent -= i128::from(bits);
+                    }
+                    FactorUpdate::DropPrecision(bits) => out.scale = out.scale.saturating_sub(bits as usize),
+                    FactorUpdate::AddConstant(_) | FactorUpdate::MulPow2(_) => {}
+                }
+                peak = peak.max(out.spent);
+            }
+            depth = depth.max(out.depth);
+            values.push(out);
+        }
+        FactorPrecision {
+            required_bits: usize::try_from(peak).unwrap_or(usize::MAX),
+            output_scale: values.last().unwrap().scale,
+            depth,
+        }
     }
 
     /// Evaluates the same schedule on a scalar for fitting and diagnostics.
@@ -164,7 +232,7 @@ impl FactoredPolynomial {
         for step in &self.steps {
             let mut result = match &step.factor {
                 Factor::Value(v) => values[*v],
-                Factor::Square(v) => values[*v] * values[*v],
+                Factor::Square(v) | Factor::GuardedSquare { value: v, .. } => values[*v] * values[*v],
                 Factor::Product(a, b) => values[*a] * values[*b],
                 Factor::WeightedSum(terms) => terms.iter().map(|&(v, c)| values[v] * self.constants[c]).sum(),
             };
@@ -172,7 +240,10 @@ impl FactoredPolynomial {
                 match update {
                     FactorUpdate::Add(v) => result += values[v],
                     FactorUpdate::AddConstant(c) => result += self.constants[c],
-                    FactorUpdate::MulPow2(bits) => result *= 2f64.ckks_powi(bits as i32),
+                    FactorUpdate::MulPow2(bits) | FactorUpdate::MulPow2AtFixedWidth(bits) => {
+                        result *= 2f64.ckks_powi(bits as i32)
+                    }
+                    FactorUpdate::DropPrecision(_) => {}
                 }
             }
             values.push(result);
@@ -225,6 +296,12 @@ impl FactoredPolynomial {
             coefficients,
         })
     }
+}
+
+pub(crate) struct FactorPrecision {
+    pub(crate) required_bits: usize,
+    pub(crate) output_scale: usize,
+    depth: usize,
 }
 
 /// A reusable schedule and its backend-encoded scalar table.
