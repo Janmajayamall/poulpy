@@ -913,6 +913,7 @@ where
         (inv_two_pi * scaling).ckks_powf(F::one() / sc_fac)
     };
 
+    let half_angle_fit = crate::approximation::half_angle_cos::matches_plan(&lit);
     let mut f_mod_poly: Polynomial<F> = match lit.eval_mod_type {
         EvalModType::CenteredResidue => {
             let half = 2f64.powi(-(lit.log_msg_ratio as i32));
@@ -970,6 +971,13 @@ where
             // the odd-degree Chebyshev coefficients in BSGS evaluation.
             Polynomial::new_with_parity(Basis::Chebyshev, coeffs, Parity::Full)
         }
+        EvalModType::CosHKEven if half_angle_fit => {
+            let coeffs = crate::approximation::half_angle_cos::coefficients()?
+                .into_iter()
+                .map(|c| scalar_from_f64("half-angle cosine", c))
+                .collect::<Result<Vec<F>>>()?;
+            Polynomial::new_with_parity(Basis::Chebyshev, coeffs, Parity::Even)
+        }
         EvalModType::CosHKEven => {
             let coeffs = cosine::approximate_cos_centered::<F>(
                 lit.f_mod_interval,
@@ -995,7 +1003,8 @@ where
         EvalModType::ExpCmplx => unreachable!(),
     }
 
-    if lit.eval_mod_type != EvalModType::CenteredResidue {
+    // The centered residue and half-angle fit already contain their output scaling.
+    if lit.eval_mod_type != EvalModType::CenteredResidue && !half_angle_fit {
         for c in &mut f_mod_poly.coeffs {
             *c = *c * s;
         }
@@ -1028,7 +1037,21 @@ where
         plan: lit,
         range_extension_consts,
         f_mod_input_offset,
-        f_mod_bsgs: EvalModBsgs::Real(f_mod_bsgs),
+        f_mod_bsgs: if half_angle_fit {
+            let factors = crate::approximation::half_angle_cos::factorization()?.encode_with(|values| {
+                let coeffs = values
+                    .iter()
+                    .map(|&c| scalar_from_f64("half-angle factor", c))
+                    .collect::<Result<Vec<F>>>()?;
+                encode(&coeffs, EvalModConstant::Polynomial)
+            })?;
+            EvalModBsgs::Factored {
+                dense: f_mod_bsgs,
+                factors,
+            }
+        } else {
+            EvalModBsgs::Real(f_mod_bsgs)
+        },
         f_mod_inv_bsgs,
         f_mod_poly: EvalModPoly::Real(f_mod_poly),
         f_mod_inv_poly: f_mod_inv_poly_opt,
